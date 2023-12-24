@@ -10,9 +10,10 @@ def get_random_matrix(d1, d2, r):
 	return X
 
 def get_random_samples(M, m):
-	indices = []
+	list_of_indices = []
 	# return a list of pairs of indices
 	shape = M.shape
-	list = []
+	for i in range(m):
+		
 
 	return indices
