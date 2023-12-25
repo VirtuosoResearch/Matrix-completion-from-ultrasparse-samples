@@ -14,9 +14,9 @@ def get_uniformly_random_samples(M, m):
 	# list_of_indices = set([])
 	# vals = dict()
 	# return a list of pairs of indices
-	row = np.array([])
-	col = np.array([])
-	data = np.array([])
+	row = []
+	col = []
+	data = []
 
 	M_shape = M.shape
 	masked_matrix = np.zeros(M_shape)
@@ -26,40 +26,54 @@ def get_uniformly_random_samples(M, m):
 		# if (x, y) not in list_of_indices:
 		#	list_of_indices.add((x, y))
 		#	vals[(x, y)] = M[x, y]
-		np.append(row, x)
-		np.append(col, y)
-		np.append(data, M[x, y])
+		row.append(x)
+		col.append(y)
+		data.append(M[x, y])
 		masked_matrix[x, y] = 1
 
 	observed_M = csr_array((data, (row, col)), shape=M_shape)
 	return observed_M, masked_matrix
 
 def get_random_samples_per_row(M, entries_per_row):
-	row = np.array([])
-	col = np.array([])
-	data = np.array([])
+	row = []
+	col = []
+	data = []
 
 	M_shape = M.shape
 	masked_matrix = np.zeros(M_shape)
 	for i in range(M_shape[0]):
 		for j in range(entries_per_row):
 			x = np.random.randint(0, M_shape[1] - 1)
-			np.append(row, i)
-			np.append(col, x)
-			np.append(data, M[i, x])
+			row.append(i)
+			col.append(x)
+			data.append(M[i, x])
 			masked_matrix[i, x] = 1
 
 	observed_M = csr_array((data, (row, col)), shape=M_shape)
-	return observed_M, masked_matrix
+	return observed_M.toarray(), masked_matrix
 
-def get_reconstruction_error(M_true, M_test, list_of_indices=[]):
+def get_reconstruction_error(M_true, M_test, masks=np.array([])):
 	assert(M_true.shape == M_test.shape)
-	m = len(list_of_indices)
 	err = 0.0
-	if not list_of_indices:
-		return np.linalg.norm(M_true - M_test, 'fro')
+	if masks.size == 0:
+		err = np.linalg.norm(M_true - M_test, 'fro')
 	else:
-		for (x, y) in list_of_indices:
-			err += (M_true[(x, y)] - M_test[(x, y)]) ** 2 / m
+		err_matrix = np.multiply(M_true - M_test, masks)
+		err = np.linalg.norm(err_matrix, 'fro')	
 	
 	return err
+
+def get_normalized_error(M_true, M_test, masks=np.array([])):
+	normalized_err = 0.0
+	if masks.size == 0:
+		err = np.linalg.norm(M_true - M_test, 'fro')
+
+		normalized_err = err / np.linalg.norm(M_true, 'fro')
+	else:
+		err_matrix = np.multiply(M_true - M_test, masks)
+
+		err = np.linalg.norm(err_matrix, 'fro')
+
+		normalized_err = err / np.linalg.norm(np.multiply(M_true, masks), 'fro')
+
+	return normalized_err

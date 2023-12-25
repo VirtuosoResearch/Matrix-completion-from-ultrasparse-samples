@@ -1,12 +1,17 @@
 from data import *
 from gradient_descent import *
 
+# generate data
 d1 = 100
 d2 = 10
 r = 3
-m = d1 * r
+m = 2
 
-# generate data
 M = get_random_matrix(d1, d2, r)
-observed_indices = get_random_samples(M, m)
+observed_M, masks = get_random_samples_per_row(M, m)
 
+# run gradient descent
+rank = 3
+eta = 0.01
+epochs = 10
+U, V = gradient_desent(observed_M, masks, rank, eta, epochs)
