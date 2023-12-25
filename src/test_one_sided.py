@@ -1,6 +1,7 @@
 from data import *
+from gradient_descent import *
 
-d1 = 10
+d1 = 100
 d2 = 10
 r = 3
 m = d1 * r

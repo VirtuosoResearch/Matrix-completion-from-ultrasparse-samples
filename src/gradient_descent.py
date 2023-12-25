@@ -8,3 +8,6 @@ def factorized_gradient_descent_one_step(M, eta):
 def gradient_desent(M, eta, num_of_epochs):
 	updated_M = []
 	return
+
+def noisy_gradient_descent(M, eta, num_of_epochs, noise_var):
+	return
