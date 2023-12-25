@@ -1,5 +1,6 @@
 import numpy as np
 import random as random
+from scipy.sparse import csr_array
 
 def get_random_matrix(d1, d2, r):
 	X = np.random.normal(0, 1, size = (d1, d2))
@@ -10,16 +11,26 @@ def get_random_matrix(d1, d2, r):
 	return X
 
 def get_random_samples(M, m):
-	list_of_indices = set([])
+	# list_of_indices = set([])
+	# vals = dict()
 	# return a list of pairs of indices
-	shape = M.shape
-	for i in range(m):
-		x = np.random.randint(0, shape[0] - 1)
-		y = np.random.randint(0, shape[1] - 1)
-		if (x, y) not in list_of_indices:
-			list_of_indices.add((x, y))
+	row = np.array([])
+	col = np.array([])
+	data = np.array([])
 
-	return list(list_of_indices)
+	M_shape = M.shape
+	for i in range(m):
+		x = np.random.randint(0, M_shape[0] - 1)
+		y = np.random.randint(0, M_shape[1] - 1)
+		# if (x, y) not in list_of_indices:
+		#	list_of_indices.add((x, y))
+		#	vals[(x, y)] = M[x, y]
+		np.append(row, x)
+		np.append(col, y)
+		np.append(data, M[x, y])
+
+	observed_M = csr_array((data, (row, col)), shape=M_shape)
+	return observed_M
 
 def get_reconstruction_error(M_true, M_test, list_of_indices=[]):
 	assert(M_true.shape == M_test.shape)
