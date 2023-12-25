@@ -4,5 +4,7 @@ function [alignment_score, align_index] = align_factor(factor_matrix, recovered_
     column_vec_norms = vecnorm(factor_matrix);
     cos_sim = normalized_factor' * factor_matrix * diag(column_vec_norms.^(-1));
     [alignment_score, align_index] = max(cos_sim);
-    fprintf('found a factor at column %d, with alignment score %.2f\n', align_index, alignment_score);
+    fprintf('found a factor at column %d, with alignment score %.2f, and all scores as\n', align_index, alignment_score);
+    disp(cos_sim);
+    fprintf('\n');
 end

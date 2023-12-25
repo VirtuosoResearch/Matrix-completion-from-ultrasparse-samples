@@ -7,7 +7,7 @@ function x_result = gradient_descent(T, true_factor, x_0, max_iteration, step_si
 	x = x_0;
 
 	[d, r_true] = size(true_factor);
-	fprintf('start opt...\n');
+	% fprintf('start opt...\n');
 	for i = 1:max_iteration
 		R = fac2tensor_sym(x, ones(r, 1)) - T;
 		R_flatten = reshape(R, [d, d*d]);
@@ -30,7 +30,7 @@ function x_result = gradient_descent(T, true_factor, x_0, max_iteration, step_si
 		end
 	end
 	x_result = x;
-	fprintf('finish opt...\n')
+	% fprintf('finish opt...\n')
 %	z = T_flatten * kron(x, x) - x;
 %	lambda = norm(z) / norm(x)
 %	z / norm(z)
