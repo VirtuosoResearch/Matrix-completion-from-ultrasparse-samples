@@ -12,7 +12,7 @@ def factorized_gradient_descent_one_step(observed_M, masks, U, V, eta):
 	return updated_U, updated_V
 
 def gradient_desent(observed_M, masks, rank, eta, num_of_epochs, gap=1):
-	init_scale = 0.1
+	init_scale = 0.001
 	d1, d2 = observed_M.shape 
 
 	U = np.random.normal(0, 1, (d1, rank)) * init_scale
