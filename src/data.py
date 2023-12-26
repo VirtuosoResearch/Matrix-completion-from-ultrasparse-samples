@@ -42,12 +42,12 @@ def get_random_samples_per_row(M, entries_per_row):
 	M_shape = M.shape
 	masked_matrix = np.zeros(M_shape)
 	for i in range(M_shape[0]):
+		js = np.random.permutation(M_shape[1])
 		for j in range(entries_per_row):
-			x = np.random.randint(0, M_shape[1] - 1)
 			row.append(i)
-			col.append(x)
-			data.append(M[i, x])
-			masked_matrix[i, x] = 1
+			col.append(js[j])
+			data.append(M[i, js[j]])
+			masked_matrix[i, js[j]] = 1
 
 	observed_M = csr_array((data, (row, col)), shape=M_shape)
 	return observed_M.toarray(), masked_matrix

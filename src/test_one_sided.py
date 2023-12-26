@@ -14,4 +14,9 @@ observed_M, masks = get_random_samples_per_row(M, m)
 rank = 3
 eta = 0.01
 epochs = 10
-U, V = gradient_desent(observed_M, masks, rank, eta, epochs)
+r_U, r_V = gradient_desent(observed_M, masks, rank, eta, epochs)
+
+# analyze projection of V to the right singular vectors
+U, D, Vt = np.linalg.svd(M)
+D = D[:r]
+Vt = Vt[:r, :]
