@@ -11,7 +11,7 @@ def factorized_gradient_descent_one_step(observed_M, masks, U, V, eta):
 	updated_V = V - eta * grad_V
 	return updated_U, updated_V
 
-def gradient_desent(observed_M, masks, rank, eta, num_of_epochs, gap=1):
+def gradient_descent(observed_M, masks, rank, eta, num_of_epochs, gap=1):
 	init_scale = 0.001
 	d1, d2 = observed_M.shape 
 
@@ -27,18 +27,18 @@ def gradient_desent(observed_M, masks, rank, eta, num_of_epochs, gap=1):
 
 	return U, V
 
-def symmetric_gradient_descent(observed_M, masks, rank, eta, num_of_epochs, gap=10):
+def symmetric_gradient_descent(symmetric_M, masks, rank, eta, num_of_epochs, gap=10):
 	init_scale = 0.0001
-	d1, d2 = observed_M.shape
+	d1, d2 = symmetric_M.shape
 	assert(d1 == d2)
 
 	U = np.random.normal(0, 1, (d1, rank)) * init_scale
 
 	for i in range(num_of_epochs):
-		U, V = factorized_gradient_descent_one_step(observed_M, masks, U, U, eta)
+		U, V = factorized_gradient_descent_one_step(symmetric_M, masks, U, U, eta)
 
 		if i % gap == 0:
-			err = get_normalized_error(observed_M, U @ U.T, masks)
+			err = get_normalized_error(symmetric_M, U @ U.T, masks)
 			print(i, err)
 
 	return U

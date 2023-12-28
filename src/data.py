@@ -10,29 +10,13 @@ def get_random_matrix(d1, d2, r):
 	X = U @ np.diag(D) @ Vt
 	return X
 
-def get_uniformly_random_samples(M, m):
-	# list_of_indices = set([])
-	# vals = dict()
-	# return a list of pairs of indices
-	row = []
-	col = []
-	data = []
-
+def get_uniformly_random_samples(M, p):
 	M_shape = M.shape
-	masked_matrix = np.zeros(M_shape)
-	for i in range(m):
-		x = np.random.randint(0, M_shape[0] - 1)
-		y = np.random.randint(0, M_shape[1] - 1)
-		# if (x, y) not in list_of_indices:
-		#	list_of_indices.add((x, y))
-		#	vals[(x, y)] = M[x, y]
-		row.append(x)
-		col.append(y)
-		data.append(M[x, y])
-		masked_matrix[x, y] = 1
-
-	observed_M = csr_array((data, (row, col)), shape=M_shape)
-	return observed_M, masked_matrix
+	masks = np.random.rand(M_shape[0], M_shape[1])
+	masks = (masks <= p).astype(int)
+	observed_M = np.multiply(M, masks)
+	# observed_M = csr_array((data, (row, col)), shape=M_shape)
+	return observed_M, masks
 
 def get_random_samples_per_row(M, entries_per_row):
 	row = []
@@ -81,6 +65,6 @@ def get_normalized_error(M_true, M_test, masks=np.array([])):
 def transform_one_sided(M):
 	matrix = M.T @ M
 	# need to regenerate the masks
-	masks = (matrix > 0).astype(int)
+	masks = (abs(matrix) > 0).astype(int)
 	return matrix, masks
 	
