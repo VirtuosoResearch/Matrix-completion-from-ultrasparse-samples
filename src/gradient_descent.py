@@ -27,5 +27,27 @@ def gradient_desent(observed_M, masks, rank, eta, num_of_epochs, gap=1):
 
 	return U, V
 
-def noisy_gradient_descent(M, eta, num_of_epochs, noise_var):
-	return
+def symmetric_gradient_descent(observed_M, masks, rank, eta, num_of_epochs, gap=10):
+	init_scale = 0.0001
+	d1, d2 = observed_M.shape
+	assert(d1 == d2)
+
+	U = np.random.normal(0, 1, (d1, rank)) * init_scale
+
+	for i in range(num_of_epochs):
+		U, V = factorized_gradient_descent_one_step(observed_M, masks, U, U, eta)
+
+		if i % gap == 0:
+			err = get_normalized_error(observed_M, U @ U.T, masks)
+			print(i, err)
+
+	return U
+
+def noisy_gradient_descent(observed_M, rank, eta, num_of_epochs, noise_var):
+	init_scale = 0.001
+	d1, d2 = observed_M.shape
+
+	U = np.random.normal(0, 1, (d1, rank)) * init_scale
+	V = np.random.normal(0, 1, (d2, rank)) * init_scale
+
+	return U, V

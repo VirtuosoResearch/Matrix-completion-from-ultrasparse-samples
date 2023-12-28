@@ -77,3 +77,10 @@ def get_normalized_error(M_true, M_test, masks=np.array([])):
 		normalized_err = err / np.linalg.norm(np.multiply(M_true, masks), 'fro')
 
 	return normalized_err
+
+def transform_one_sided(M):
+	matrix = M.T @ M
+	# need to regenerate the masks
+	masks = (matrix > 0).astype(int)
+	return matrix, masks
+	

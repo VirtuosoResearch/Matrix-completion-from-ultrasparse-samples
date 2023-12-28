@@ -20,3 +20,7 @@ r_U, r_V = gradient_desent(observed_M, masks, rank, eta, epochs)
 U, D, Vt = np.linalg.svd(M)
 D = D[:r]
 Vt = Vt[:r, :]
+
+# transform the matrix in order to learn the (right) subspace
+transformed_M, transformed_masks = transform_one_sided(observed_M)
+U = symmetric_gradient_descent(transformed_M, transformed_masks, rank, eta, epochs)
