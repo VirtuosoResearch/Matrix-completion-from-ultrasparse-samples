@@ -27,6 +27,35 @@ def gradient_descent(observed_M, masks, rank, eta, num_of_epochs, gap=1):
 
 	return U, V
 
+def noisy_gradient_descent(observed_M, masks, rank, eta, num_of_epochs, noise_var, gap=10):
+	init_scale = 0.001
+	d1, d2 = observed_M.shape
+
+	U = np.random.normal(0, 1, (d1, rank)) * init_scale
+	V = np.random.normal(0, 1, (d2, rank)) * init_scale
+
+	for i in range(num_of_epochs):
+		# first compute gradient
+		X = np.multiply(U @ V.T, masks) - observed_M
+		grad_U = X @ V
+		grad_V = X.T @ U
+
+		# add noise
+		noise_U = np.random.normal(0, 1, (d1, rank)) * noise_var
+		# noise_V = np.random.normal(0, 1, (d2, rank)) * noise_var
+
+		U = U - eta * (grad_U + noise_U)
+		V = V - eta * grad_V
+
+		if i % gap == 0:
+			#u1, d1, vt1 = np.linalg.svd(U @ V.T)
+			#vt1 = vt1[:rank, :]
+			err = get_normalized_error(observed_M, U @ V.T, masks)
+			print(i, err)
+
+	return U, V
+
+
 def symmetric_gradient_descent(symmetric_M, masks, rank, eta, num_of_epochs, gap=10):
 	init_scale = 0.0001
 	d1, d2 = symmetric_M.shape
@@ -64,11 +93,4 @@ def projected_gradient_descent(symmetric_M, rank, eta, num_of_epochs, gap = 10):
 
 	return V
 
-def noisy_gradient_descent(observed_M, rank, eta, num_of_epochs, noise_var):
-	init_scale = 0.001
-	d1, d2 = observed_M.shape
 
-	U = np.random.normal(0, 1, (d1, rank)) * init_scale
-	V = np.random.normal(0, 1, (d2, rank)) * init_scale
-
-	return U, V
