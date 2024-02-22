@@ -72,6 +72,29 @@ def symmetric_gradient_descent(symmetric_M, masks, rank, eta, num_of_epochs, gap
 
 	return U
 
+
+def symmetric_noisy_gradient_descent(observations, masks, rank, eta, epochs, noise_var, reg, gap=10):
+	init_scale = 0.0001
+	d1, d2 = observations.shape
+	assert(d1 == d2)
+
+	U = np.random.normal(0, 1, (d1, rank)) * init_scale
+
+	for i in range(epochs):
+		X = np.multiply(U @ U.T, masks) - observations
+		grad = X @ U
+
+		noise = np.random.normal(0, 1, (d1, rank)) * noise_var
+		U = U - eta * (grad + noise)
+		U = U - eta * reg * U
+
+		if i % gap == 0:
+			err = get_normalized_error(observations, U @ U.T, masks)
+			print(i, err)
+
+	return U
+
+
 def projection(X, rank):
 	U, D, Vt = np.linalg.svd(X)
 	U = U[:, :rank]
