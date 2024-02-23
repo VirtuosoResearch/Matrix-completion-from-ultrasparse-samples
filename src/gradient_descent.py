@@ -73,8 +73,8 @@ def symmetric_gradient_descent(symmetric_M, masks, rank, eta, num_of_epochs, gap
 	return U
 
 
-def symmetric_noisy_gradient_descent(observations, masks, rank, eta, epochs, noise_var, reg, gap=10):
-	init_scale = 0.0001
+def symmetric_noisy_gradient_descent(observations, masks, rank, eta, epochs, noise_var, reg, init_scale, gap=10):
+	init_scale = 0.001
 	d1, d2 = observations.shape
 	assert(d1 == d2)
 
