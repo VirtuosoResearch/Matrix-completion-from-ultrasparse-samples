@@ -22,3 +22,7 @@ def nuclear_norm_minimization(X0, indices):
 #X_nuc, nuc_val = nuclear_norm_minimization(X0, indices)
 #print(X_nuc)
 #print(nuc_val)
+
+# given an incomplete tall and skiny matrix X, estimate a rank-r subspace of the span of the row vectors
+def estimate_low_rank_subspace(X):
+    return X
