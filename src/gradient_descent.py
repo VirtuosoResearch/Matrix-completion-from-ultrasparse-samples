@@ -83,8 +83,10 @@ def symmetric_noisy_gradient_descent(observations, masks, rank, eta, epochs, noi
 	for i in range(epochs):
 		X = np.multiply(U @ U.T, masks) - observations
 		grad = X @ U
+		print(np.linalg.norm(grad, 'fro'))
 
 		noise = np.random.normal(0, 1, (d1, rank)) * noise_var
+		print(np.linalg.norm(noise, 'fro'))
 		U = U - eta * (grad + noise)
 		U = U - eta * reg * U
 
