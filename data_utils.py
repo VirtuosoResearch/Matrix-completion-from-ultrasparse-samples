@@ -12,7 +12,7 @@ import re
 
 data_path = '~/dataset/ml/'
 
-def load_data_all(dataset, s=300):
+def load_data_all(dataset, s=200):
     print(dataset)
     preprocess_file = './data/'+dataset+'.pkl'
     full_M_file = './data/'+dataset+'/matrix.pt'
@@ -42,7 +42,7 @@ def load_data_all(dataset, s=300):
     
     elif dataset == 'netflix':
         df = pd.read_csv(
-            "./data/netflix/data.csv",
+            "/home2/zzs/dataset/netflix/netflix/data.csv",
             names=["movie_id", "user_id", "rating", "date"],
             parse_dates=["date"],
             encoding="ISO-8859-1",
@@ -62,7 +62,8 @@ def load_data_all(dataset, s=300):
         return matrix
     
     elif dataset == 'gene':
-        M = load_data_gene()
+        data = np.load('/home2/zzs/dataset/gene/all22.npy')
+        return torch.tensor(data, dtype=float)
 
 def load_data_ml1m():
     """
