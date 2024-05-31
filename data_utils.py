@@ -10,13 +10,10 @@ import os
 import pickle
 import re
 
-data_path = './data/ml/'
-vcf_path = './data/'
+data_path = './data/'
+vcf_path = './data/gene/'
 
 def load_data_all(dataset, s=200):
-    print(dataset)
-    preprocess_file = './data/'+dataset+'.pkl'
-    full_M_file = './data/'+dataset+'/matrix.pt'
     if dataset == 'random':
         mat1 = torch.randn(100,1)
         mat2 = torch.randn(1, 5)
@@ -43,7 +40,7 @@ def load_data_all(dataset, s=200):
     
     elif dataset == 'netflix':
         df = pd.read_csv(
-            vcf_path,
+            data_path,
             names=["movie_id", "user_id", "rating", "date"],
             parse_dates=["date"],
             encoding="ISO-8859-1",
@@ -65,3 +62,9 @@ def load_data_all(dataset, s=200):
     elif dataset == 'gene':
         data = np.load(vcf_path)
         return torch.tensor(data, dtype=float)
+
+def load_data_syn(r=5, d1=5000, d2=200):
+    mat1 = torch.randn(d1,r)
+    mat2 = torch.randn(r, d2)
+    matrix = mat1 @ mat2
+    return mat1, mat2, matrix
