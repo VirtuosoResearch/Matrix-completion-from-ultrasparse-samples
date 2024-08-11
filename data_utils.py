@@ -62,6 +62,22 @@ def load_data_all(dataset, s=200):
     elif dataset == 'gene':
         data = np.load(vcf_path)
         return torch.tensor(data, dtype=float)
+    
+    elif dataset == 'sweet':
+        # read table
+        ratings_title = ['product','user', 'value']
+        df = pd.read_csv('./data/sweet.csv')
+        product_ids = {product: idx for idx, product in enumerate(df['product'].unique())}
+        df['product_id'] = df['product'].map(product_ids)
+
+        # 使用pivot_table生成用户-产品评分矩阵
+        rating_matrix = df.pivot_table(index='user', columns='product_id', values='value', fill_value=0)
+
+        # 将DataFrame转换为numpy矩阵
+        matrix_np = rating_matrix.values
+        matrix = torch.tensor(matrix_np)
+
+        return matrix
 
 def load_data_syn(r=5, d1=5000, d2=200):
     mat1 = torch.randn(d1,r)
