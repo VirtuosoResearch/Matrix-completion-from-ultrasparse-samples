@@ -1,9 +1,9 @@
 import numpy as np
 import random as random
-from scipy.sparse import csr_array
+from scipy.sparse import csr_matrix
 
 def get_random_matrix(d1, d2, r):
-	X = np.random.normal(0, 1, size = (d1, d2))
+	X = np.random.normal(2, 1, size = (d1, d2))
 
 	U, D, Vt = np.linalg.svd(X, full_matrices=False)
 	D[r:] = 0
