@@ -5,6 +5,8 @@ import numpy as np
 from collections import Counter
 import cyvcf2
 from tqdm import tqdm
+import h5py
+import scipy.sparse as sp
 
 import os
 import pickle
@@ -78,6 +80,28 @@ def load_data_all(dataset, s=200):
         matrix = torch.tensor(matrix_np)
 
         return matrix
+    
+    elif dataset in ['douban', 'flixster', 'yahoo_music']:
+        path_file = f'./data/{dataset}.mat'
+        db = h5py.File(path_file, 'r')
+        ds = db['M']
+        try:
+            if 'ir' in ds.keys():
+                data = np.asarray(ds['data'])
+                ir = np.asarray(ds['ir'])
+                jc = np.asarray(ds['jc'])
+                out = sp.csc_matrix((data, ir, jc)).astype(np.float32)
+        except AttributeError:
+            # Transpose in case is a dense matrix because of the row- vs column- major ordering between python and matlab
+            out = np.asarray(ds).astype(np.float32).T
+
+        db.close()
+
+        d1, d2 = out.shape
+        selected_ids = np.random.choice(d2, size=s, replace=False)
+
+        return torch.tensor(out)[:,selected_ids]
+        #return torch.tensor(out)
 
 def load_data_syn(r=5, d1=5000, d2=200):
     mat1 = torch.randn(d1,r)

@@ -19,7 +19,7 @@ from utils import *
 
 from data_utils import load_data_all, load_data_syn
 
-dataset = 'sweet'
+dataset = 'douban'
 sample_col = 300
 print(dataset)
 if dataset == 'random':
@@ -118,6 +118,13 @@ elif dataset =='sweet':
     alpha = 0.1
     eta = 50
     noise = 0.1
+elif dataset in ['douban', 'flixster', 'yahoo']:
+    p = 0.75
+    r = 5
+    epochs = 500
+    alpha = 0.1
+    eta = 10
+    noise = 0.01
 print(f"epochs: {epochs}")
 print(f"alpha: {alpha}")
 print(f"eta: {eta}")
