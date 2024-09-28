@@ -10,12 +10,18 @@ def get_random_matrix(d1, d2, r):
 	X = U @ np.diag(D) @ Vt
 	return X
 
+
 def get_uniformly_random_samples(M, p):
 	M_shape = M.shape
-	masks = np.random.rand(M_shape[0], M_shape[1])
-	masks = (masks <= p).astype(int)
-	observed_M = np.multiply(M, masks)
+	masks = np.random.rand(M_shape[0], M_shape[1]) <= p
+	#observed_M = np.multiply(M, masks)
+	observed_M = M * masks
 	# observed_M = csr_array((data, (row, col)), shape=M_shape)
+	same_nonzero_locations = np.array_equal((observed_M != 0), (masks != 0))
+	if same_nonzero_locations:
+		print("Non-zero elements are correctly aligned with the mask.")
+	else:
+		print("Non-zero elements do not align correctly with the mask.")
 	return observed_M, masks
 
 def get_random_samples_per_row(M, entries_per_row):
