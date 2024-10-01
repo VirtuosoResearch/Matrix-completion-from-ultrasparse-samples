@@ -12,10 +12,10 @@ import os
 import pickle
 import re
 
-data_path = './data/'
-vcf_path = './data/gene/'
+data_path = '../data/'
+vcf_path = '../data/gene/'
 
-def load_data_all(dataset, s=200):
+def load_data_all(dataset, s=None):
     if dataset == 'random':
         mat1 = torch.randn(100,1)
         mat2 = torch.randn(1, 5)
@@ -30,8 +30,36 @@ def load_data_all(dataset, s=200):
 
         # sample
         unique_ids = ratings['MovieID'].unique()
-        selected_ids = np.random.choice(unique_ids, size=s, replace=False)
-        selected_data = ratings[ratings['MovieID'].isin(selected_ids)]
+        if s is not None:
+            selected_ids = np.random.choice(unique_ids, size=s, replace=False)
+            selected_data = ratings[ratings['MovieID'].isin(selected_ids)]
+        else:
+            selected_data = ratings[ratings['MovieID'].isin(unique_ids)]
+        #print(selected_data)
+        
+
+        #selected_data = torch.tensor(selected_data.values)
+        matrix_df = selected_data.pivot_table(index='UserID', columns='MovieID', values='ratings', aggfunc='first')
+        matrix_df = matrix_df.fillna(0)
+        matrix = torch.tensor(matrix_df.values)
+
+        return matrix
+    
+    elif dataset == 'ml-10m':
+        # read table
+        ratings_title = ['UserID','MovieID', 'ratings', 'timestamps']
+        ratings = pd.read_table(data_path+'ml-10M100K/ratings.dat', sep='::', header=None, names=ratings_title, engine = 'python')
+        ratings = ratings.filter(regex='UserID|MovieID|ratings')
+
+        # sample
+        unique_ids = ratings['MovieID'].unique()
+        if s is not None:
+            selected_ids = np.random.choice(unique_ids, size=s, replace=False)
+            selected_data = ratings[ratings['MovieID'].isin(selected_ids)]
+        else:
+            selected_data = ratings[ratings['MovieID'].isin(unique_ids)]
+        #print(selected_data)
+        
 
         #selected_data = torch.tensor(selected_data.values)
         matrix_df = selected_data.pivot_table(index='UserID', columns='MovieID', values='ratings', aggfunc='first')
@@ -51,8 +79,13 @@ def load_data_all(dataset, s=200):
         data = df[["movie_id", "user_id", "rating"]]
         # sample
         unique_ids = data['movie_id'].unique()
-        selected_ids = np.random.choice(unique_ids, size=s, replace=False)
-        selected_data = data[data['movie_id'].isin(selected_ids)]
+        # sample
+        unique_ids = ratings['MovieID'].unique()
+        if s is not None:
+            selected_ids = np.random.choice(unique_ids, size=s, replace=False)
+            selected_data = data[data['movie_id'].isin(selected_ids)]
+        else:
+             selected_data = data[data['movie_id'].isin(unique_ids)]
 
         #selected_data = torch.tensor(selected_data.values)
         matrix_df = selected_data.pivot_table(index='user_id', columns='movie_id', values='rating', aggfunc='first')
@@ -68,7 +101,7 @@ def load_data_all(dataset, s=200):
     elif dataset == 'sweet':
         # read table
         ratings_title = ['product','user', 'value']
-        df = pd.read_csv('./data/sweet.csv')
+        df = pd.read_csv('../data/sweet.csv')
         product_ids = {product: idx for idx, product in enumerate(df['product'].unique())}
         df['product_id'] = df['product'].map(product_ids)
 
@@ -82,7 +115,7 @@ def load_data_all(dataset, s=200):
         return matrix
     
     elif dataset in ['douban', 'flixster', 'yahoo_music']:
-        path_file = f'./data/{dataset}.mat'
+        path_file = f'../data/{dataset}.mat'
         db = h5py.File(path_file, 'r')
         ds = db['M']
         try:
@@ -98,13 +131,29 @@ def load_data_all(dataset, s=200):
         db.close()
 
         d1, d2 = out.shape
-        selected_ids = np.random.choice(d2, size=s, replace=False)
+        if s is not None:
+            selected_ids = np.random.choice(d2, size=s, replace=False)
 
-        return torch.tensor(out)[:,selected_ids]
+            return torch.tensor(out)[:,selected_ids]
+        else:
+            return torch.tensor(out)
         #return torch.tensor(out)
 
-def load_data_syn(r=5, d1=5000, d2=200):
-    mat1 = torch.randn(d1,r)
-    mat2 = torch.randn(r, d2)
+def load_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
+    mat1 = torch.normal(2, 1, (d1,r)).to(device)
+    mat2 = torch.normal(2, 1, (r, d2)).to(device)
     matrix = mat1 @ mat2
     return mat1, mat2, matrix
+
+def get_masks(M, p):
+	M_shape = M.shape
+	masks = torch.rand(M_shape).to(M.device) <= p
+	#observed_M = np.multiply(M, masks)
+	observed_M = M * masks
+	# observed_M = csr_array((data, (row, col)), shape=M_shape)
+	same_nonzero_locations = np.array_equal((observed_M != 0), (masks != 0))
+	if same_nonzero_locations:
+		print("Non-zero elements are correctly aligned with the mask.")
+	else:
+		print("Non-zero elements do not align correctly with the mask.")
+	return observed_M, masks
