@@ -1,5 +1,203 @@
 import torch
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
 import scipy
+
+def sparse_collate_fn(batch):
+    """
+    Custom collate function to handle sparse tensors.
+    
+    Args:
+        batch: A list of sparse tensors.
+        
+    Returns:
+        The batch of sparse tensors as-is.
+    """
+    return batch  # Return the list of sparse tensors as-is
+
+class MatrixDataset(Dataset):
+    def __init__(self, matrix, d1, d2):
+        """
+        Args:
+            matrix (numpy array or tensor): The matrix to be split into chunks.
+            d1 (int): Number of rows to extract per iteration.
+        """
+        """
+        if isinstance(matrix, np.ndarray):
+            matrix = torch.tensor(matrix, dtype=torch.float32)
+        if matrix.is_sparse:
+            self.matrix = matrix
+        else:
+            self.matrix = matrix.to_sparse()
+        """
+        self.matrix = scipy_sparse_to_torch(matrix)
+        if not self.matrix.is_coalesced():
+            self.matrix = self.matrix.coalesce()
+        self.d1 = d1
+        self.d2 = d2
+
+        self.total_rows = self.matrix.shape[0]
+        self.total_cols = self.matrix.shape[1]
+
+        self.num_row_blocks = (self.total_rows + d1 - 1) // d1
+        self.num_col_blocks = (self.total_cols + d2 - 1) // d2
+        self.total_blocks = self.num_row_blocks * self.num_col_blocks
+
+    def __len__(self):
+        return self.total_blocks
+
+    def __getitem__(self, idx):
+        """
+        Return a sparse submatrix of size d1 x d2.
+        """
+        # Compute the block's row and column indices
+        row_block_idx = idx // self.num_col_blocks
+        col_block_idx = idx % self.num_col_blocks
+
+        # Compute row and column ranges
+        start_row = row_block_idx * self.d1
+        end_row = min(start_row + self.d1, self.total_rows)
+
+        start_col = col_block_idx * self.d2
+        end_col = min(start_col + self.d2, self.total_cols)
+
+        # Get the coalesced sparse tensor's indices and values
+        sparse_indices = self.matrix._indices()  # Shape: (2, nnz)
+        sparse_values = self.matrix._values()    # Shape: (nnz,)
+
+        # Create a mask to filter indices within the block
+        mask = (sparse_indices[0] >= start_row) & (sparse_indices[0] < end_row) & \
+               (sparse_indices[1] >= start_col) & (sparse_indices[1] < end_col)
+
+        # Filter indices and values
+        filtered_indices = sparse_indices[:, mask].clone()
+        filtered_values = sparse_values[mask].clone()
+
+        # Adjust indices to be relative to the block
+        filtered_indices[0] -= start_row
+        filtered_indices[1] -= start_col
+
+        # Create a new sparse tensor for this block
+        block_size = (end_row - start_row, end_col - start_col)
+        sparse_block = torch.sparse.FloatTensor(
+            filtered_indices,
+            filtered_values,
+            torch.Size(block_size)
+        )
+
+        return sparse_block
+
+class MatrixDataset_col(Dataset):
+    def __init__(self, matrix, sub_d2):
+        """
+        Args:
+            matrix (numpy array or tensor): The matrix to be split into chunks.
+            d1 (int): Number of rows to extract per iteration.
+        """
+        """
+        if isinstance(matrix, np.ndarray):
+            matrix = torch.tensor(matrix, dtype=torch.float32)
+        if matrix.is_sparse:
+            self.matrix = matrix
+        else:
+            self.matrix = matrix.to_sparse()
+        """
+        self.matrix = scipy_sparse_to_torch(matrix)
+        if not self.matrix.is_coalesced():
+            self.matrix = self.matrix.coalesce()
+        self.d2 = sub_d2
+        self.total_rows = self.matrix.shape[0]
+        self.total_cols = self.matrix.shape[1]
+
+    def __len__(self):
+        # Calculate the number of full d1-sized chunks in the matrix
+        return (self.total_cols + self.d2 - 1) // self.d2
+
+    def __getitem__(self, idx):
+        """
+        Return a sparse slice of the matrix along columns.
+        """
+        start_idx = idx * self.d2
+        end_idx = min(start_idx + self.d2, self.total_cols)
+
+        # Get the coalesced sparse tensor's indices and values
+        sparse_indices = self.matrix._indices()  # Shape: (2, nnz)
+        sparse_values = self.matrix._values()    # Shape: (nnz,)
+
+        # Mask where column indices are in [start_idx, end_idx)
+        mask = (sparse_indices[1] >= start_idx) & (sparse_indices[1] < end_idx)
+
+        # Filter indices and values
+        filtered_indices = sparse_indices[:, mask].clone()
+        filtered_values = sparse_values[mask].clone()
+
+        # Adjust column indices to start from 0
+        filtered_indices[1] -= start_idx
+
+        # Create a new sparse tensor of size [D, end_idx - start_idx]
+        sparse_batch = torch.sparse.FloatTensor(
+            filtered_indices,
+            filtered_values,
+            torch.Size([self.matrix.shape[0], end_idx - start_idx])
+        )
+
+        return sparse_batch
+
+class MatrixDataset_row(Dataset):
+    def __init__(self, matrix, sub_d1):
+        """
+        Args:
+            matrix (numpy array or tensor): The matrix to be split into chunks.
+            d1 (int): Number of rows to extract per iteration.
+        """
+        """
+        if isinstance(matrix, np.ndarray):
+            matrix = torch.tensor(matrix, dtype=torch.float32)
+        if matrix.is_sparse:
+            self.matrix = matrix
+        else:
+            self.matrix = matrix.to_sparse()
+        """
+        self.matrix = scipy_sparse_to_torch(matrix)
+        if not self.matrix.is_coalesced():
+            self.matrix = self.matrix.coalesce()
+        self.d1 = sub_d1
+        self.total_rows = self.matrix.shape[0]
+        self.total_cols = self.matrix.shape[1]
+
+    def __len__(self):
+        # Calculate the number of full d1-sized chunks in the matrix
+        return (self.total_rows + self.d1 - 1) // self.d1
+
+    def __getitem__(self, idx):
+        """
+        Return a sparse slice of the matrix.
+        """
+        start_idx = idx * self.d1
+        end_idx = min(start_idx + self.d1, self.total_rows)
+        
+        # Get the sparse tensor's indices and values
+        sparse_indices = self.matrix._indices()  # 2D tensor with shape (2, number_of_non_zero_elements)
+        sparse_values = self.matrix._values()    # 1D tensor with shape (number_of_non_zero_elements)
+
+        # Filter the indices that correspond to the rows in the range [start_idx, end_idx]
+        mask = (sparse_indices[0] >= start_idx) & (sparse_indices[0] < end_idx)
+
+        # Get the relevant indices and values
+        filtered_indices = sparse_indices[:, mask].clone()
+        filtered_values = sparse_values[mask].clone()
+
+        # Adjust the row indices to be relative to the start_idx (to match the new matrix size)
+        filtered_indices[0] -= start_idx
+
+        # Create a new sparse matrix for this batch
+        sparse_batch = torch.sparse.FloatTensor(
+            filtered_indices,
+            filtered_values,
+            torch.Size([end_idx - start_idx, self.matrix.shape[1]])
+        )
+        
+        return sparse_batch
 
 def generate_sparse_matrix(shape, sparsity, device='cpu'):
     """
@@ -113,7 +311,7 @@ def torch_sparse_to_scipy(sparse_tensor):
     values = values.cpu().numpy()
     return scipy.sparse.coo_matrix((values, indices), shape=shape)
 
-def scipy_sparse_to_torch(scipy_sparse, device):
+def scipy_sparse_to_torch(scipy_sparse, device='cpu'):
     scipy_sparse = scipy_sparse.tocoo()
     indices = torch.tensor([scipy_sparse.row, scipy_sparse.col], dtype=torch.long, device=device)
     values = torch.tensor(scipy_sparse.data, dtype=torch.float32, device=device)

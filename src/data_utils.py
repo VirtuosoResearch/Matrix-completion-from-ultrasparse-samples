@@ -7,6 +7,8 @@ import cyvcf2
 from tqdm import tqdm
 import h5py
 import scipy.sparse as sp
+from scipy.sparse import coo_matrix
+from sklearn.preprocessing import LabelEncoder
 
 import os
 import pickle
@@ -67,6 +69,40 @@ def load_data_all(dataset, s=None):
         matrix = torch.tensor(matrix_df.values)
 
         return matrix
+    
+    elif dataset == 'ml-32m':
+        file_path = data_path+'ml-32m/matrix.pt'
+        if os.path.exists(file_path):
+            sparse_matrix = torch.load(file_path)
+        else:
+            
+            data = pd.read_csv(data_path+'ml-32m/ratings.csv')
+
+            if data['userId'].dtype != 'int':
+                data['userId'] = data['userId'].astype(int)
+
+            movie_encoder = LabelEncoder()
+            data['movieId'] = movie_encoder.fit_transform(data['movieId'])
+            # Ratings should be float, just in case, let's convert
+            data['rating'] = data['rating'].astype(float)
+
+            num_users = data['userId'].nunique()
+            num_movies = data['movieId'].nunique()
+
+            # Create row, col, and data arrays for the sparse matrix
+            row = data['userId'].values
+            col = data['movieId'].values
+            data = data['rating'].values
+            sparse_matrix = coo_matrix((data, (row, col)))
+
+            print("Sparse matrix shape: ", sparse_matrix.shape)
+            print("Non-zero entries: ", sparse_matrix.nnz)
+            print("Number of unique users: ", num_users)
+            print("Number of unique movies: ", num_movies)
+
+            torch.save(sparse_matrix, file_path)
+
+        return sparse_matrix
     
     elif dataset == 'netflix':
         df = pd.read_csv(
