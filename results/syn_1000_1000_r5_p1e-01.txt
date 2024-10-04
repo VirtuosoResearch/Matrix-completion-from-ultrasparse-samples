@@ -1,0 +1,17 @@
+rmse error: 2.2667
+estimate error: 0.1137
+cost time: 2.1591
+local time: 2024-10-03 00:09:36
+
+rmse error: 2.2705
+estimate error: 0.1130
+cost time: 1.9227
+local time: 2024-10-03 00:10:07
+
+d1 = 1000, d2 = 1000, entries = 1000000
+run times: 1
+rmse error: 2.3809 +- 0.0
+estimate error: 0.0694 +- 0.0
+cost time: 8.4073 +- 0.0
+local time: 2024-10-03 15:39:18
+
