@@ -327,3 +327,13 @@ def sparsify_matrix(matrix, threshold):
     values = sparse_matrix[indices[0], indices[1]]
     sparse_matrix = torch.sparse_coo_tensor(indices, values, size=matrix.shape).coalesce()
     return sparse_matrix
+
+def sparse_svds_for_tensor(matrix, k):
+    device = matrix.device
+    matrix = matrix.cpu().to_sparse()
+    matrix_scipy = torch_sparse_to_scipy(matrix)
+    U_scipy, D_scipy, Vt_scipy = scipy.sparse.linalg.svds(matrix_scipy, k=k)
+    U = torch.from_numpy(U_scipy.copy()).to(device)
+    D = torch.from_numpy(D_scipy.copy()).to(device)
+    Vt = torch.from_numpy(Vt_scipy.copy()).to(device)
+    return U, D, Vt
