@@ -1,0 +1,40 @@
+local time: 2024-10-05 22:09:28
+d1 = 1000, d2 = 100, entries = 100000
+epsilon = 1, delta = 0.001, args.tau = 3.776479482650757
+run times: 1
+rmse error: 3.3372 +- 0.0
+estimate error: 0.8134 +- 0.0
+cost time: 1.5035 +- 0.0
+
+local time: 2024-10-05 22:09:53
+d1 = 1000, d2 = 100, entries = 100000
+epsilon = 1, delta = 0.001, args.tau = 3.776479482650757
+run times: 1
+rmse error: 3.0293 +- 0.0
+estimate error: 0.9687 +- 0.0
+cost time: 0.9768 +- 0.0
+
+local time: 2024-10-05 22:11:02
+d1 = 1000, d2 = 100, entries = 100000
+epsilon = 1, delta = 0.001, args.tau = 3.776479482650757
+run times: 1
+rmse error: 0.1320 +- 0.0
+estimate error: 0.4693 +- 0.0
+cost time: 1.3100 +- 0.0
+
+local time: 2024-10-05 22:11:55
+d1 = 1000, d2 = 100, entries = 100000
+epsilon = 1, delta = 0.001, args.tau = 3.776479482650757
+run times: 1
+rmse error: 1.5909 +- 0.0
+estimate error: 0.4383 +- 0.0
+cost time: 1.2627 +- 0.0
+
+local time: 2024-10-05 22:14:20
+d1 = 1000, d2 = 100, entries = 100000
+epsilon = 1, delta = 0.001, args.tau = 3.776479482650757
+run times: 1
+rmse error: 0.0812 +- 0.0
+estimate error: 0.0509 +- 0.0
+cost time: 1.5122 +- 0.0
+
