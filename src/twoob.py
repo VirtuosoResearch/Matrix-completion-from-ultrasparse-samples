@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument("--d2", type=int, default=250)
     parser.add_argument("--p", type=float, default=0.1)
     parser.add_argument("--sample_entry", type=int, default=2)
-    parser.add_argument("--epsilon", type=float, default=0.1)
+    parser.add_argument("--epsilon", type=float, default=1)
     #parser.add_argument("--delta", type=float, default=10e-5)
     parser.add_argument("--mark", type=str, default="none")
     parser.add_argument("--save_weights", action="store_true", default=False)
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     err_list, rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
 
     #users_list = [1000, 2000, 6000, 10000, 20000, 50000]
-    users_list = [5000, 10000, 20000, 40000, 70000]
+    users_list = [5000, 10000, 30000, 50000, 70000]
     #users_list = [70000]
     for d1 in users_list:
         # dataset
@@ -89,7 +89,7 @@ if __name__ == "__main__":
             d1, d2 = M.shape
             p = 2 / d2
             r = args.r
-            recovery_p = 0.5
+            recovery_p = 0.75
             observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), 2)
             p = args.sample_entry / d2
             observed_M = torch.from_numpy(observed_M).float().to(device)
@@ -136,8 +136,10 @@ if __name__ == "__main__":
             X_T_freq_err = relative_err(X_T, MTM)
 
             estimation_matrix = X_T
-            ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
-            rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
+            lam = 0.1
+            ob2_rmse_err = lstsq_recovery(estimation_goal=direct_SVD, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
             
             end_time = time.time()
             cost_time = end_time - start_time
@@ -168,6 +170,10 @@ if __name__ == "__main__":
     SVD_T_err_array = np.array(SVD_T_err_list)
     SVD_T_err_mean = np.mean(SVD_T_err_array, axis=0)
     SVD_T_err_std = np.std(SVD_T_err_array, axis=0)
+
+    SVD_T_rmse_array = np.array(SVD_T_rmse_list)
+    SVD_T_rmse_mean = np.mean(SVD_T_rmse_array, axis=0)
+    SVD_T_rmse_std = np.std(SVD_T_rmse_array, axis=0)
 
     X_original_err_array = np.array(X_original_err_list)
     X_original_err_mean = np.mean(X_original_err_array, axis=0)
@@ -222,11 +228,11 @@ if __name__ == "__main__":
     # Define the content in the desired format
     content = f"run times: {args.runs}\n"
     for i, d1 in enumerate(users_list):
-        content += f"rows: {d2}:\n\
+        content += f"rows: {d1}:\n\
  original_err: {original_err_mean[i]:.4f}+-{original_err_std[i]:.4f}\n\
  T_prob_err_err: {T_prob_err_mean[i]:.4f}+-{T_prob_err_std[i]:.4f}\n\
  T_freq_err: {T_freq_err_mean[i]:.4f}+-{T_freq_err_std[i]:.4f}\n\
- SVD_T_err: {SVD_T_err_mean[i]:.4f}+-{SVD_T_err_std[i]:.4f}\n\
+ SVD_T_err: {SVD_T_err_mean[i]:.4f}+-{SVD_T_err_std[i]:.4f}, SVD_T_rmse: {SVD_T_rmse_mean[i]:.4f}+-{SVD_T_rmse_std[i]:.4f}\n\
  X_original_err: {X_original_err_mean[i]:.4f}+-{X_original_err_std[i]:.4f}\n\
  ob2_err: {ob2_err_mean[i]:.4f}+-{ob2_err_std[i]:.4f}, ob2_rmse: {ob2_rmse_mean[i]:.4f}+-{ob2_rmse_std[i]:.4f}\n\
  err: {err_mean[i]:.4f}+-{err_std[i]:.4f}, rmse: {rmse_mean[i]:.4f}+-{rmse_std[i]:.4f}\n"

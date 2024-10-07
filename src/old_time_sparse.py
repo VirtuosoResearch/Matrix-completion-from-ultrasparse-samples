@@ -68,115 +68,112 @@ if __name__ == "__main__":
         M = load_sparse_data_syn(args.r, d1, d2, num_entries, device)
     else:
         M = load_data_all(dataset)
-        #M = M.float().to(device)
+        M = M.float().to(device)
         d1, d2 = M.shape
-        if dataset != 'ml-32m':
-            M = M.to_sparse()
-    M_all = M
-    M_dataset = MatrixDataset(M_all, 44000, 3000)
-    matrix_dataloader = DataLoader(
-        M_dataset,
-        batch_size=1,         # You can adjust the batch size as needed
-        shuffle=False,
-        collate_fn=sparse_collate_fn  # Pass the custom collate function
-    )
+        M = M.to_sparse()
     dataset_content = f'sparse d1 = {d1}, d2 = {d2}, entries = {num_entries}\n'
     print(dataset_content)
     
     #users_list = [1000, 2000, 6000, 10000, 20000, 50000]
-    # privacy
-    epsilon = 1
-    delta = 1/d1
-    tau = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/epsilon
-    privacy_content = f'epsilon = {epsilon}, delta = {delta}, tau = {tau}\n'
-    print(privacy_content)
+    epsilon_list = [0.1]
+    for epsilon in epsilon_list:
+        # privacy
+        delta = 1/d1
+        tau = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/epsilon
+        privacy_content = f'epsilon = {epsilon}, delta = {delta}, tau = {tau}\n'
+        print(privacy_content)
 
-    for run in range(args.runs):
-        # main part
-        d1, d2 = M.shape
-        p = args.p
-        r = args.r
-        recovery_p = 0.75
-        observed_M, masks = get_sparse_masks(M, p)
-        value_indices = M.indices()
-        #observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), int(p*d2))
-        p = args.sample_entry / d2
-        #observed_M = torch.from_numpy(observed_M).float().to(device)
-        #masks = torch.from_numpy(masks).to(device)
-        #observed_M = observed_M.to_dense()
-        #masks = masks.to_dense()
-        print(observed_M.shape)
-        _, recovery_masks = get_sparse_masks(M, recovery_p)
-
-        start_time = time.time()
-
-        # observed MTM
-        cov_observe_M =  observed_M.T @ observed_M
-        MTM = M.T @ M
-        #print(cov_observe_M)
-
-        # freu reweight
-        cov_M_count = (1 * (M != 0)).float().T @ (1 * (M != 0).float())
-        cov_M_count = cov_M_count + (cov_M_count == 0) * 1
-        cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
-        cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
-        #cov_mask_count = (masks.T @ masks).to_dense()
-        #cov_mask_count = cov_mask_count + (cov_mask_count == 0) * 1
-        #noise_matrix = sym_noise(d2, tau).to(device)
-        #print(noise_matrix)
-        #T = cov_observe_M / (cov_observe_count/(d1*value_ratio**2))
-        T = cov_observe_M / (cov_observe_count/(d1))
-        T_M = MTM / (cov_M_count/(d1))
-        #T = torch.sparse_coo_tensor(cov_observe_M,T_values, (d2, d2))
-        #T = T.to_dense()
-                    
-        #T =  T+noise_matrix
-        # MTM
-        print("MTM: ", MTM)
-        print("T: ", T)
-        print("T_M: ", T_M)
-        T_masks = 1*(T!=0)
-
-        mask_err_all = T*T_masks - T_M*T_masks
-        #mask_err_all = cov_observe_M - MTM
-        #mask_err_mask = T*ETE - MTM*ETE
-        #mask_err = T*missing_mask_MTM - MTM*missing_mask_MTM
-        #mask_err = T - MTM
-
-        #print(torch.norm(mask_err_mask, 'fro') / torch.norm(MTM, 'fro'))
-        print(torch.norm(mask_err_all, 'fro') / torch.norm(T_M, 'fro'))
-        # prob reweight
         
-        U, D, Vt = sparse_svds_for_tensor(T, k=r)
-        direct_SVD = U @ torch.diag(D) @ Vt
-        svd_err = relative_err(direct_SVD, T_M)
-        X_T = direct_SVD
-        print("svd_err: ", svd_err)
 
-        # impute missing values from rank-r SVD corresponding to masks
+        for run in range(args.runs):
+            # main part
+            d1, d2 = M.shape
+            p = args.p
+            r = args.r
+            recovery_p = 0.75
+            #observed_M, masks = get_sparse_masks(M, p)
+            M = M.to_dense()
+            value_masks = (M>0).float()
+            value_ratio = (M!=0).sum() / M.numel()
+            print(value_ratio)
+            observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), int(p*d2))
+            p = args.sample_entry / d2
+            observed_M = torch.from_numpy(observed_M).float().to(device)
+            masks = torch.from_numpy(masks).to(device)
+            #observed_M = observed_M.to_dense()
+            #masks = masks.to_dense()
+            print(observed_M.shape)
+            _, recovery_masks = get_masks(M, recovery_p)
 
-        #T_masks = 1 * (T != 0)
-        #X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
-        #X_T, err_estimates = sparse_soft_impute(T, MTM, r, use_power_method=True, draw=False)
-        X_T, err_estimates = soft_impute(T, T_masks, T_M, r, use_power_method=False, draw=True)
-        #X_T, err_estimates = alt_min(T, T_masks, T_M, r, draw=True)
+            start_time = time.time()
+
+            # observed MTM
+            cov_observe_M =  observed_M.T @ observed_M
+            MTM = M.T @ M
+            #print(cov_observe_M)
+
+            # freu reweight
+            cov_M_count = (1 * (M != 0)).float().T @ (1 * (M != 0).float())
+            cov_M_count = cov_M_count + (cov_M_count == 0) * 1
+            cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
+            cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
+            #cov_mask_count = (masks.T @ masks).to_dense()
+            #cov_mask_count = cov_mask_count + (cov_mask_count == 0) * 1
+            #noise_matrix = sym_noise(d2, tau).to(device)
+            #print(noise_matrix)
+            #T = cov_observe_M / (cov_observe_count/(d1*value_ratio**2))
+            T = cov_observe_M / (cov_observe_count/(d1))
+            T_M = MTM / (cov_M_count/(d1))
+            #T = torch.sparse_coo_tensor(cov_observe_M,T_values, (d2, d2))
+            #T = T.to_dense()
+                      
+            #T =  T+noise_matrix
+            # MTM
+            print("MTM: ", MTM)
+            print("T: ", T)
+            print("T_M: ", T_M)
+            T_masks = 1*(T!=0)
+
+            mask_err_all = T*T_masks - T_M*T_masks
+            #mask_err_all = cov_observe_M - MTM
+            #mask_err_mask = T*ETE - MTM*ETE
+            #mask_err = T*missing_mask_MTM - MTM*missing_mask_MTM
+            #mask_err = T - MTM
+
+            #print(torch.norm(mask_err_mask, 'fro') / torch.norm(MTM, 'fro'))
+            print(torch.norm(mask_err_all, 'fro') / torch.norm(T_M, 'fro'))
+            # prob reweight
+            
+            U, D, Vt = sparse_svds_for_tensor(T, k=r)
+            direct_SVD = U @ torch.diag(D) @ Vt
+            svd_err = relative_err(direct_SVD, T_M)
+            X_T = direct_SVD
+            print("svd_err: ", svd_err)
+
+            # impute missing values from rank-r SVD corresponding to masks
+
+            #T_masks = 1 * (T != 0)
+            #X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
+            #X_T, err_estimates = sparse_soft_impute(T, MTM, r, use_power_method=True, draw=False)
+            X_T, err_estimates = soft_impute(T, T_masks, T_M, r, use_power_method=False, draw=True)
+            #X_T, err_estimates = alt_min(T, T_masks, T_M, r, draw=True)
 
 
-        #original_err = relative_err(cov_observe_M, MTM)
-        #X_T_freq_err = relative_err(X_T, MTM)
-        original_err = (torch.norm(cov_observe_M - T_M, 'fro') / torch.norm(T_M, 'fro')).item()
-        X_T_freq_err = (torch.norm(X_T - T_M, 'fro') / torch.norm(T_M, 'fro')).item()
+            #original_err = relative_err(cov_observe_M, MTM)
+            #X_T_freq_err = relative_err(X_T, MTM)
+            original_err = (torch.norm(cov_observe_M - T_M, 'fro') / torch.norm(T_M, 'fro')).item()
+            X_T_freq_err = (torch.norm(X_T - T_M, 'fro') / torch.norm(T_M, 'fro')).item()
 
-        estimation_matrix = X_T
+            estimation_matrix = X_T
 
-        rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
-        
-        end_time = time.time()
-        cost_time = end_time - start_time
+            rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
+            
+            end_time = time.time()
+            cost_time = end_time - start_time
 
-        original_err_list[run].append(original_err)
-        err_list[run].append(X_T_freq_err)
-        rmse_list[run].append(rmse_err)
+            original_err_list[run].append(original_err)
+            err_list[run].append(X_T_freq_err)
+            rmse_list[run].append(rmse_err)
 
     original_err_array = np.array(original_err_list)
     print(original_err_array)
