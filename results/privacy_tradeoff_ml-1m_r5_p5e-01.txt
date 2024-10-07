@@ -1,0 +1,8 @@
+local time: 2024-10-07 12:48:05
+sparse d1 = 5948, d2 = 250, entries = 1000000
+epsilon = 0.1, delta = 0.00016812373907195696, tau = 42.223106384277344
+run times: 1
+epsilon 0.1:
+ original_err: 0.7182+-0.0000
+ err: 35.3763+-0.0000
+
