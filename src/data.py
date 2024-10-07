@@ -39,7 +39,7 @@ def get_random_samples_per_row(M, entries_per_row):
 			data.append(M[i, js[j]])
 			masked_matrix[i, js[j]] = 1
 
-	observed_M = csr_array((data, (row, col)), shape=M_shape)
+	observed_M = csr_matrix((data, (row, col)), shape=M_shape)
 	return observed_M.toarray(), masked_matrix
 
 def get_reconstruction_error(M_true, M_test, masks=np.array([])):

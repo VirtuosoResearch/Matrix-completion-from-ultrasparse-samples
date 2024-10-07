@@ -17,58 +17,40 @@ def main(args, M):
     d1, d2 = M.shape
     p = args.p
     r = args.r
-    recovery_p = 0.75
-    if args.sample == 'uniform':
-        observed_M, masks = get_masks(M, p)
-    #observed_M, masks = get_uniformly_random_samples(M.cpu().numpy(), p)
-    elif args.sample == 'perrow':
-        observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), args.sample_entry)
-        p = args.sample_entry / d2
-    observed_M = torch.from_numpy(observed_M).float().to(device)
-    masks = torch.from_numpy(masks).to(device)
-    _, recovery_masks = get_masks(M, recovery_p)
+    observed_M, masks = get_masks(M, p)
 
     non_zero_rows = torch.any(observed_M != 0, dim=1)
 
-    #observed_M = observed_M[non_zero_rows]
-    #masks = masks[non_zero_rows]
-    #M = M[non_zero_rows]
+    observed_M = observed_M[non_zero_rows]
+    masks = masks[non_zero_rows]
+    M = M[non_zero_rows]
     print(M.shape)
 
     start_time = time.time()
 
     cov_observe_M =  observed_M.T @ observed_M
-    #cov_observe_count = (observed_M == 0).float().t() @ (observed_M == 0).float()
+    cov_observe_count = (observed_M == 0).float().t() @ (observed_M == 0).float()
     #diag_cov = torch.diag( torch.diag(cov_observe_M) )
 
     cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
     cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
-    noise_matrix = sym_noise(d2, args.tau).to(device)
-    T = cov_observe_M / (cov_observe_count/d1) 
-    #T += noise_matrix
+    noise_matrix = sym_noise(d2, args.sigma).to(device)
+    T = cov_observe_M / (cov_observe_count/d1) + noise_matrix
+    #T = cov_observe_M / (cov_observe_count/d1)
     MTM = M.T @ M
-    T_masks = 1 * (T!=0)
-
-    mask_err_all = T - MTM
-    mask_err_mask = T*T_masks - MTM*T_masks
-    #mask_err = T*missing_mask_MTM - MTM*missing_mask_MTM
-    #mask_err = T - MTM
-
-    print(torch.norm(mask_err_mask, 'fro') / torch.norm(MTM, 'fro'))
-    print(torch.norm(mask_err_all, 'fro') / torch.norm(MTM, 'fro'))
 
     # impute missing values from rank-r SVD corresponding to masks
-    use_power_method = True
+    use_power_method = False
     train_losses = []
     err_estimates = []
 
     epochs = 100
     tol = 1e-7
     lr = 0.1
-    X = T
-    
-    #T_masks = 1 * (T != 0)
-    print(T_masks.sum())
+    X = T.clone()
+    X_list = []
+    X_list.append(X)
+    T_masks = 1 * (T!=0)
     loop = tqdm(range(epochs))
     for i in loop:
         if not use_power_method:
@@ -84,8 +66,9 @@ def main(args, M):
             Vt = torch.from_numpy(Vt_scipy.copy()).to(device)
         X_update = U @ torch.diag(D) @ Vt
 
+        #X = X * T_masks + X_update * (1 - T_masks)
+        X = X * (1-lr) + X_update * lr
         X = X * T_masks + X_update * (1 - T_masks)
-        #X = X * (1-lr) + X_update * lr
         err = MTM - X
         loss = (err**2).mean()
         train_losses.append(loss.item())
@@ -95,8 +78,9 @@ def main(args, M):
                 break
         loop.set_description(f"relative err: {relative_err:.7f}")
         err_estimates.append(relative_err.item())
+        X_list.append(X)
         #print(relative_err)
-
+    
     plt.figure(figsize=(5, 3))
     plt.plot(err_estimates, label='Relative Error')
     plt.xlabel('Epoch')
@@ -106,11 +90,25 @@ def main(args, M):
     plt.savefig(f'../plots/{args.label}-rel-err.png', dpi=150)
     plt.show()
 
-    rmse_err = lstsq_recovery(estimation_goal=X, M=M, masks=masks, r=r, recovery_masks=recovery_masks)
+    sub_opt_X = X_list[1]
+    X_T = X
+
+    #print(T)
+    #print(sub_opt_X)
+    #print(X_T)
+
+    ablation_goals = [torch.rand(X.shape), T, sub_opt_X, X_T, MTM]
+    gap1 = torch.norm(X_T - T)
+    gap2 = torch.norm(X_T - sub_opt_X)
+    print(gap1, gap2)
+    rmse_errs = []
+    for goals in ablation_goals:
+        rmse_errs.append(lstsq_recovery(estimation_goal=goals.to(device), M=M, masks=masks, r=r))
     
+    return rmse_errs
+
     end_time = time.time()
     cost_time = end_time - start_time
-
 
     curve = {
         'train_losses': train_losses,
@@ -125,14 +123,12 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     # Controled by parameters
     parser.add_argument("--dataset", type=str, default="syn")
-    parser.add_argument("--sample", type=str, default="perrow")
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--r", type=int, default=5)
     parser.add_argument("--d1", type=int, default=1000)
     parser.add_argument("--d2", type=int, default=1000)
-    parser.add_argument("--p", type=float, default=0.1)
-    parser.add_argument("--sample_entry", type=int, default=2)
+    parser.add_argument("--p", type=float, default=0.01)
     parser.add_argument("--epsilon", type=float, default=1)
     #parser.add_argument("--delta", type=float, default=10e-5)
     parser.add_argument("--mark", type=str, default="none")
@@ -162,7 +158,7 @@ if __name__ == "__main__":
     if dataset == 'syn':
         d1 = args.d1
         d2 = args.d2
-        M = load_data_syn(args.r, d1, d2, device)
+        _, _, M = load_sparse_data_syn(args.r, d1, d2, device)
     else:
         M = load_data_all(dataset)
         M = M.float().to(device)
@@ -172,37 +168,33 @@ if __name__ == "__main__":
 
     # privacy
     delta = 1/d1
-    args.tau = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/args.epsilon
-    privacy_content = f'epsilon = {args.epsilon}, delta = {delta}, args.tau = {args.tau}\n'
+    args.sigma = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/args.epsilon
+    privacy_content = f'epsilon = {args.epsilon}, delta = {delta}, args.sigma = {args.sigma}\n'
     print(privacy_content)
 
-    rmse_err_list, estimate_err_list, cost_time_list = [], [], []
+    rmse_errs_list = []
     for run in range(args.runs):
-        rmse_err, estimate_err, cost_time, curve = main(args, M)
-        rmse_err_list.append(rmse_err)
-        estimate_err_list.append(estimate_err)
-        cost_time_list.append(cost_time)
+        rmse_errs = main(args, M)
+        rmse_errs_list.append(rmse_errs)
+    
+    array = np.array(rmse_errs_list)
+    mean = np.mean(array, axis=0)
+    std = np.std(array, axis=0)
+    print(array)
 
     # Get the local time
     local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     time_content = f'local time: {local_time}\n'
 
-    # Save
-    results = {
-        'args': args,
-        'dataset_content': dataset_content,
-        'rmse_err_list': rmse_err_list,
-        'estimate_err_list': estimate_err_list,
-        'cost_time_list': cost_time_list,
-        'curve': curve
-    }
-    torch.save(results, f'../results/results_data/{args.label}.pt')
-
     # Define the content in the desired format
-    content = f"run times: {args.runs}\nrmse error: {np.mean(rmse_err_list):.4f} +- {np.std(rmse_err_list)}\nestimate error: {np.mean(estimate_err_list):.4f} +- {np.std(estimate_err_list)}\ncost time: {np.mean(cost_time_list):.4f} +- {np.std(cost_time_list)}\n\n"
+    content = f"run times: {args.runs}\nrand: {mean[0]:.4f} +- {std[0]:.4f}\n\
+T: {mean[1]:.4f} +- {std[1]:.4f}\n\
+sub-opt: {mean[2]:.4f} +- {std[2]:.4f}\n\
+X_T: {mean[3]:.4f} +- {std[3]:.4f}\n\
+MTM: {mean[4]:.4f} +- {std[4]:.4f}\n\n"
     print(content)
     # Write the content to a file
-    with open(f'../results/{args.label}.txt', 'a') as file:
+    with open(f'../results/ablation_estimation_{args.label}.txt', 'a') as file:
         file.write(time_content)
         file.write(dataset_content)
         file.write(privacy_content)

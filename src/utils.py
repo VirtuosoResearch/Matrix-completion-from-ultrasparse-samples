@@ -4,6 +4,12 @@ import yaml
 import logging
 import torch
 from torch import optim
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+from sparse_utils import sparse_svds_for_tensor
 
 def get_free_gpu():
     os.system('nvidia-smi -q -d Memory |grep -A5 GPU|grep Free >tmp')
@@ -71,3 +77,43 @@ def svd_norm_reverse(A, scale):
     A_normalized = U @ torch.diag(S_reverse) @ V.t()
 
     return A_normalized
+
+def l2_dis(a, b, dim=0):
+    a_normalized = F.normalize(a, p=2, dim=dim)
+    b_normalized = F.normalize(b, p=2, dim=dim)
+
+    l2_distance = torch.norm(a_normalized - b_normalized, p=2, dim=dim)
+    return l2_distance.mean()
+
+def check_rank(M, draw=False, max_k=30):
+    #U, S, Vh = torch.linalg.svd(M, full_matrices=False)
+    U, S, Vh = sparse_svds_for_tensor(M, k=max_k)
+    singular_values = S.cpu().numpy()
+
+    cumulative_variance = np.cumsum(singular_values**2) / np.sum(singular_values**2)
+
+    threshold = 0.9
+    r = np.argmax(cumulative_variance >= threshold) + 1
+    print(f"useful rank cum contribution ≥ {int(threshold*100)}%: {r}")
+
+    if draw:
+        plt.figure(figsize=(8, 5))
+        plt.plot(singular_values, 'o-', linewidth=2)
+        plt.title('specturm')
+        plt.xlabel('num')
+        plt.ylabel('value')
+        plt.grid(True)
+        plt.show()
+        
+        plt.figure(figsize=(8, 5))
+        plt.plot(cumulative_variance, 'o-', linewidth=2)
+        plt.axhline(y=0.9, color='r', linestyle='--', label='90\% contribution')
+        plt.title('cumulative comtribution')
+        plt.xlabel('num')
+        plt.ylabel('cumulative contribution')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+def relative_err(X, MTM):
+    return (torch.norm(X-MTM, 'fro') / torch.norm(MTM, 'fro')).item()

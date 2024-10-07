@@ -106,7 +106,7 @@ def load_data_all(dataset, s=None):
     
     elif dataset == 'netflix':
         df = pd.read_csv(
-            data_path,
+            data_path+"netflixdata.csv",
             names=["movie_id", "user_id", "rating", "date"],
             parse_dates=["date"],
             encoding="ISO-8859-1",
@@ -115,8 +115,6 @@ def load_data_all(dataset, s=None):
         data = df[["movie_id", "user_id", "rating"]]
         # sample
         unique_ids = data['movie_id'].unique()
-        # sample
-        unique_ids = ratings['MovieID'].unique()
         if s is not None:
             selected_ids = np.random.choice(unique_ids, size=s, replace=False)
             selected_data = data[data['movie_id'].isin(selected_ids)]
@@ -127,6 +125,7 @@ def load_data_all(dataset, s=None):
         matrix_df = selected_data.pivot_table(index='user_id', columns='movie_id', values='rating', aggfunc='first')
         matrix_df = matrix_df.fillna(0)
         matrix = torch.tensor(matrix_df.values)
+        print(matrix.shape)
 
         return matrix
     
@@ -176,20 +175,57 @@ def load_data_all(dataset, s=None):
         #return torch.tensor(out)
 
 def load_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
-    mat1 = torch.normal(2, 1, (d1,r)).to(device)
-    mat2 = torch.normal(2, 1, (r, d2)).to(device)
-    matrix = mat1 @ mat2
-    return mat1, mat2, matrix
+    X = torch.normal(2, 1, size = (d1, d2)).to(device)
+
+    U, D, Vt = torch.linalg.svd(X, full_matrices=False)
+    D[r:] = 0
+    X = U @ torch.diag(D) @ Vt
+
+    return X
 
 def get_masks(M, p):
-	M_shape = M.shape
-	masks = torch.rand(M_shape).to(M.device) <= p
-	#observed_M = np.multiply(M, masks)
-	observed_M = M * masks
-	# observed_M = csr_array((data, (row, col)), shape=M_shape)
-	same_nonzero_locations = np.array_equal((observed_M != 0), (masks != 0))
-	if same_nonzero_locations:
-		print("Non-zero elements are correctly aligned with the mask.")
-	else:
-		print("Non-zero elements do not align correctly with the mask.")
-	return observed_M, masks
+    d1, d2 = M.shape
+    k = int(d2*p)
+    non_zero_indices = torch.nonzero(M, as_tuple=False)
+    sampled_indices = non_zero_indices[torch.randperm(non_zero_indices.size(0))[:k]]
+    masks = torch.zeros_like(M, dtype=int)
+
+    # Set the sampled indices to 1 in the mask
+    for idx in sampled_indices:
+        masks[idx[0], idx[1]] = 1
+    observed_M = M*masks
+    same_nonzero_locations = np.array_equal((observed_M != 0), (masks != 0))
+    if same_nonzero_locations:
+        print("Non-zero elements are correctly aligned with the mask.")
+    else:
+        print("Non-zero elements do not align correctly with the mask.")
+    return observed_M, masks
+
+def set_random_zeros(matrix, ratio):
+    """
+    Set a certain ratio of elements to 0 randomly in a full matrix.
+
+    Args:
+    matrix (torch.Tensor): The full input matrix.
+    ratio (float): The ratio of elements to set to 0 (0 <= ratio <= 1).
+
+    Returns:
+    torch.Tensor: A new matrix with the specified ratio of elements set to 0.
+    """
+    # Get the number of elements in the matrix
+    num_elements = matrix.numel()
+
+    # Compute the number of elements to be set to zero
+    num_zeros = int(num_elements * ratio)
+
+    # Flatten the matrix to 1D
+    flattened_matrix = matrix.view(-1)
+
+    # Generate random indices to set to 0
+    zero_indices = torch.randperm(num_elements)[:num_zeros]
+
+    # Set the selected indices to 0
+    flattened_matrix[zero_indices] = 0
+
+    # Reshape the matrix back to its original shape
+    return flattened_matrix.view_as(matrix)

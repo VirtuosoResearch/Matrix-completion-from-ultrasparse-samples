@@ -329,11 +329,56 @@ def sparsify_matrix(matrix, threshold):
     return sparse_matrix
 
 def sparse_svds_for_tensor(matrix, k):
+    if k > min(matrix.shape):
+        k = min(matrix.shape)
     device = matrix.device
     matrix = matrix.cpu().to_sparse()
     matrix_scipy = torch_sparse_to_scipy(matrix)
     U_scipy, D_scipy, Vt_scipy = scipy.sparse.linalg.svds(matrix_scipy, k=k)
-    U = torch.from_numpy(U_scipy.copy()).to(device)
-    D = torch.from_numpy(D_scipy.copy()).to(device)
-    Vt = torch.from_numpy(Vt_scipy.copy()).to(device)
+    U = torch.from_numpy(U_scipy[::-1].copy()).to(device)
+    D = torch.from_numpy(D_scipy[::-1].copy()).to(device)
+    Vt = torch.from_numpy(Vt_scipy[::-1].copy()).to(device)
     return U, D, Vt
+
+def nonzero_ratio(M):
+    return (torch.count_nonzero(M)/M.numel()).item()
+
+def load_sparse_data_syn(r=5, d1=5000, d2=2000, num_elements=1000, device='cpu'):
+    # Randomly select indices for the non-zero elements
+    indices = torch.randint(0, min(d1, d2), size=(2, num_elements))  # 2 rows (for row and column indices)
+    
+    # Generate random values for the selected indices
+    values = torch.normal(2, 1, (num_elements,))  # Random values for the sparse matrix
+    
+    # Create the sparse matrix with the given shape (d1, d2)
+    sparse_matrix = torch.sparse_coo_tensor(indices, values, (d1, d2))
+
+    matrix_scipy = torch_sparse_to_scipy(sparse_matrix)
+    U_scipy, D_scipy, Vt_scipy = scipy.sparse.linalg.svds(matrix_scipy, k=r)
+    U = torch.from_numpy(U_scipy[::-1].copy()).to(device).to_sparse()
+    D = torch.from_numpy(D_scipy[::-1].copy()).to(device)
+    D = torch.diag(D).to_sparse()
+    Vt = torch.from_numpy(Vt_scipy[::-1].copy()).to(device).to_sparse()
+    
+    return U @ D @ Vt
+
+def get_sparse_masks(M, p):
+    original_indices = M.indices()
+    original_values = M.values()
+    total_nonzeros = original_values.size(0)
+    num_samples = int(total_nonzeros * p)
+    permuted_indices = torch.randperm(total_nonzeros)
+    sampled_indices = permuted_indices[:num_samples]
+
+    sampled_coords = original_indices[:, sampled_indices]  # Shape: (2, num_samples)
+    sampled_values = original_values[sampled_indices]     # Shape: (num_samples,)
+
+    observed_M = torch.sparse_coo_tensor(sampled_coords, sampled_values, M.size(), device=M.device)
+    observed_M = observed_M.coalesce()  # Ensure the indices are coalesced
+
+    # Create the mask sparse matrix (with 1s at sampled positions)
+    mask_values = torch.ones(num_samples, dtype=original_values.dtype, device=M.device)
+    mask = torch.sparse_coo_tensor(sampled_coords, mask_values, M.size(), device=M.device)
+    mask = mask.coalesce()
+
+    return observed_M, mask
