@@ -209,3 +209,48 @@ epsilon 0.1:
  err: 0.9683+-0.0000
  rmse err: 3.2557+-0.0000
 
+local time: 2024-10-07 16:10:11
+sparse d1 = 6040, d2 = 3706, entries = 1000000
+epsilon = 0.1, delta = 0.00016556291390728477, tau = 42.25944519042969
+run times: 1
+epsilon 0.1:
+ original_err: 1.0000+-0.0000
+ err: 0.9687+-0.0000
+ rmse err: 3.6437+-0.0000
+
+local time: 2024-10-07 16:43:32
+sparse d1 = 6040, d2 = 3706, entries = 1000000
+epsilon = 0.1, delta = 0.00016556291390728477, tau = 42.25944519042969
+run times: 1
+epsilon 0.1:
+ original_err: 1.0000+-0.0000
+ err: 1.0000+-0.0000
+ rmse err: 3.7193+-0.0000
+
+local time: 2024-10-07 16:46:06
+sparse d1 = 6040, d2 = 3706, entries = 1000000
+epsilon = 0.1, delta = 0.00016556291390728477, tau = 42.25944519042969
+run times: 1
+epsilon 0.1:
+ original_err: 1.0000+-0.0000
+ err: 1.0001+-0.0000
+ rmse err: 3.3871+-0.0000
+
+local time: 2024-10-07 16:46:32
+sparse d1 = 6040, d2 = 3706, entries = 1000000
+epsilon = 0.1, delta = 0.00016556291390728477, tau = 42.25944519042969
+run times: 1
+epsilon 0.1:
+ original_err: 1.0000+-0.0000
+ err: 0.9961+-0.0000
+ rmse err: 3.2070+-0.0000
+
+local time: 2024-10-07 16:48:53
+sparse d1 = 6040, d2 = 3706, entries = 1000000
+epsilon = 0.1, delta = 0.00016556291390728477, tau = 42.25944519042969
+run times: 1
+epsilon 0.1:
+ original_err: 1.0000+-0.0000
+ err: 0.9682+-0.0000
+ rmse err: 3.1934+-0.0000
+

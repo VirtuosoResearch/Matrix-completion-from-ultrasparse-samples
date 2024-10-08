@@ -15,3 +15,11 @@ estimate error: 0.0694 +- 0.0
 cost time: 8.4073 +- 0.0
 local time: 2024-10-03 15:39:18
 
+local time: 2024-10-07 18:31:40
+d1 = 1000, d2 = 1000, entries = 1000000
+epsilon = 1, delta = 0.001, args.tau = 3.776479482650757
+run times: 1
+rmse error: 0.4393 +- 0.0
+estimate error: 0.9468 +- 0.0
+cost time: 9.9215 +- 0.0
+

@@ -50,3 +50,12 @@ epsilon 0.1:
  err: 0.5699+-0.0000
  rmse err: 2.2307+-0.0000
 
+local time: 2024-10-07 16:49:21
+sparse d1 = 6040, d2 = 3706, entries = 1000000
+epsilon = 0.1, delta = 0.00016556291390728477, tau = 42.25944519042969
+run times: 1
+epsilon 0.1:
+ original_err: 0.9999+-0.0000
+ err: 0.5698+-0.0000
+ rmse err: 2.4595+-0.0000
+
