@@ -409,3 +409,71 @@ epsilon 0.002:
  ob2_err: 0.4091+-0.0000
  err: 0.0781+-0.0000
 
+local time: 2024-10-07 23:11:01
+d1 = 10000, d2 = 1000, entries = 10000000
+epsilon = 0.002, delta = 0.0001, tau = 2171.805908203125
+run times: 1
+epsilon 0.0001:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.1358+-0.0000
+ T_freq_err: 1.2589+-0.0000
+ SVD_T_err: 1.1848+-0.0000
+ ob2_err: 0.4184+-0.0000
+ err: 0.8546+-0.0000
+epsilon 0.0002:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.0787+-0.0000
+ T_freq_err: 0.8401+-0.0000
+ SVD_T_err: 1.1716+-0.0000
+ ob2_err: 0.4141+-0.0000
+ err: 0.4313+-0.0000
+epsilon 0.0003:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.0635+-0.0000
+ T_freq_err: 0.7351+-0.0000
+ SVD_T_err: 1.1722+-0.0000
+ ob2_err: 0.4137+-0.0000
+ err: 0.2921+-0.0000
+epsilon 0.0004:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.0931+-0.0000
+ T_freq_err: 0.6956+-0.0000
+ SVD_T_err: 1.1682+-0.0000
+ ob2_err: 0.4142+-0.0000
+ err: 0.2230+-0.0000
+epsilon 0.0005:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.1065+-0.0000
+ T_freq_err: 0.6761+-0.0000
+ SVD_T_err: 1.1689+-0.0000
+ ob2_err: 0.4138+-0.0000
+ err: 0.1831+-0.0000
+epsilon 0.0007:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.0747+-0.0000
+ T_freq_err: 0.6585+-0.0000
+ SVD_T_err: 1.1666+-0.0000
+ ob2_err: 0.4141+-0.0000
+ err: 0.1384+-0.0000
+epsilon 0.001:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.1031+-0.0000
+ T_freq_err: 0.6488+-0.0000
+ SVD_T_err: 1.1692+-0.0000
+ ob2_err: 0.4126+-0.0000
+ err: 0.1072+-0.0000
+epsilon 0.0015:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.1253+-0.0000
+ T_freq_err: 0.6445+-0.0000
+ SVD_T_err: 1.1684+-0.0000
+ ob2_err: 0.4139+-0.0000
+ err: 0.0866+-0.0000
+epsilon 0.002:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 32.1410+-0.0000
+ T_freq_err: 0.6435+-0.0000
+ SVD_T_err: 1.1679+-0.0000
+ ob2_err: 0.4152+-0.0000
+ err: 0.0782+-0.0000
+
