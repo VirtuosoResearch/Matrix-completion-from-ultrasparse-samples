@@ -1,0 +1,14 @@
+local time: 2024-10-10 03:04:31
+sparse d1 = 200949, d2 = 84432, entries = 100000, p = 0.1
+epsilon = 20, delta = 4.976387043478694e-06, tau = 0.24933862686157227
+run times: 1, cost: 511.064989566803
+err: 2.8673+-0.0000
+rmse err: nan+-nan
+
+local time: 2024-10-10 03:43:57
+sparse d1 = 200949, d2 = 84432, entries = 100000, p = 0.1
+epsilon = 20, delta = 4.976387043478694e-06, tau = 0.24933862686157227
+run times: 1, cost: 484.0562207698822
+err: 2.7667+-0.0000
+rmse err: nan+-nan
+

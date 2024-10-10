@@ -1,0 +1,8 @@
+local time: 2024-10-10 03:04:46
+d1 = 10000, d2 = 1000, entries = 10000000
+epsilon = 20, delta = 0.0001, args.tau = 0.21718060970306396
+run times: 1
+rmse error: 0.0000 +- 0.0
+estimate error: 0.0000 +- 0.0
+cost time: 11.1363 +- 0.0
+
