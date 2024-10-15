@@ -165,3 +165,23 @@ sample 0.01:
  oracle_err: 0.0013+-0.0000, oracle_rmse: 0.1239+-0.0000
  err: 0.9999+-0.0000, rmse: 0.2606+-0.0000
 
+local time: 2024-10-15 18:00:33
+d1 = 10000, d2 = 1000, entries = 10000000
+epsilon = 10, delta = 0.0001, args.tau = 0.43436121940612793
+run times: 1
+sample 0.002:
+ oracle_err: 0.0013+-0.0000, oracle_rmse: 0.1240+-0.0000
+ err: 1.0000+-0.0000, rmse: 1.0729+-0.0000
+sample 0.004:
+ oracle_err: 0.0013+-0.0000, oracle_rmse: 0.1241+-0.0000
+ err: 1.0000+-0.0000, rmse: 0.4663+-0.0000
+sample 0.006:
+ oracle_err: 0.0013+-0.0000, oracle_rmse: 0.1241+-0.0000
+ err: 1.0000+-0.0000, rmse: 0.3299+-0.0000
+sample 0.008:
+ oracle_err: 0.0013+-0.0000, oracle_rmse: 0.1238+-0.0000
+ err: 0.9999+-0.0000, rmse: 0.2861+-0.0000
+sample 0.01:
+ oracle_err: 0.0013+-0.0000, oracle_rmse: 0.1237+-0.0000
+ err: 0.9999+-0.0000, rmse: 0.2603+-0.0000
+
