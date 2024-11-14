@@ -1,7 +1,6 @@
-
 ### Overview
 
-We provide the implementation of Efficient Private Matrix Completion from Few Entries Per Row.  First, the algorithm uses the estimated propensity from the observed data matrix M to estimation the second-moment matrix M^\top M. Second, provided with the inversely weighted second-moment matrix, we consider an iterative, low-rank imputation algorithm by computing a rank-r singular vector decomposition of the reweighted second-moment matrix. We evaluate the relative estimation error and RMSE in user-level recovery of our algorithm.
+We provide the implementation of Efficient Private Matrix Completion from Few Entries Per Row.  First, the algorithm uses the estimated propensity from the observed data matrix M to estimate the second-moment matrix $M^\top M$. Second, provided with the inversely weighted second-moment matrix, we consider an iterative, low-rank imputation algorithm by computing a rank-r singular vector decomposition of the reweighted second-moment matrix. We evaluate the relative estimation error and RMSE in user-level recovery of our algorithm.
 
 ### Datasets
 
@@ -14,7 +13,7 @@ We provide the implementation of Efficient Private Matrix Completion from Few En
 
 To install requirements, see the package versions in `requirements.txt`. We provide the code for runing experiments on synthetic datasets and MovieLens datasets.
 
-**Synthetic datasets.** Enter the `./src` folder to conduct experiments on synthetic datasets.
+**Synthetic datasets.** 
 
 * Command: Use `python exp_on_synthetic.py` to run experiments on synthetic datasets.
 * Parameters:
@@ -25,7 +24,7 @@ To install requirements, see the package versions in `requirements.txt`. We prov
   * --epsilon: \varepsilon in differential privacy (Default: 10).
   * --delta: \delta in differential privacy (Default: 1/d1).
 
-**MovieLens datasets.** Enter the `./src` folder to conduct fine-tuning experiments on MovieLens datasets.
+**MovieLens datasets.** 
 
 * Command: Use `python exp_on_movielens.py` to run experiments on synthetic datasets. The code will generate a file `matrix.pt` in the corresponding data path after proccessing the data in the first time, which can be quickly accessed during the next run.
 * Parameters:
