@@ -21,8 +21,8 @@ To install requirements, see the package versions in `requirements.txt`. We prov
   * --d1: Number of rows in the synthetic matrix (Default: 10000).
   * --d2: Number of columns in the synthetic matrix (Default: 1000).
   * --p: Sample probability (Default: 0.01).
-  * --epsilon: \varepsilon in differential privacy (Default: 10).
-  * --delta: \delta in differential privacy (Default: 1/d1).
+  * --epsilon: $\varepsilon$ in differential privacy (Default: 10).
+  * --delta: $\delta$ in differential privacy (Default: 1/d1).
 
 **MovieLens datasets.** 
 
@@ -30,5 +30,5 @@ To install requirements, see the package versions in `requirements.txt`. We prov
 * Parameters:
   * --r: rank (Default: 10).
   * --p: Sample probability (Default: 0.01).
-  * --epsilon: \varepsilon in differential privacy (Default: 10).
-  * --delta: \delta in differential privacy (Default: 1/d1).
+  * --epsilon: $\varepsilon$ in differential privacy (Default: 10).
+  * --delta: $\delta$ in differential privacy (Default: 1/d1).
