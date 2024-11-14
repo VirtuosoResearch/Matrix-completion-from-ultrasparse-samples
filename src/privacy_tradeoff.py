@@ -12,7 +12,7 @@ from power_method_svd import power_svd
 from sparse_power_method_svd import power_svd_sparse
 from sparse_utils import *
 from recovery import lstsq_recovery
-from postprocess import soft_impute
+from postprocess import *
 
 
 if __name__ == "__main__":
@@ -56,6 +56,7 @@ if __name__ == "__main__":
     SVD_T_err_list, SVD_T_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     X_original_err_list, X_original_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     X_T_freq_err_list, X_T_freq_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
+    ob2_err_list, ob2_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     err_list, rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
 
     # dataset
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     print(dataset_content)
 
     #users_list = [1000, 2000, 6000, 10000, 20000, 50000]
-    epsilon_list = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1]
+    epsilon_list = [0.0002, 0.0003, 0.0004, 0.0005, 0.0007, 0.001, 0.0015, 0.002]
     for epsilon in epsilon_list:
         # privacy
         delta = 1/d1
@@ -88,12 +89,12 @@ if __name__ == "__main__":
             d1, d2 = M.shape
             p = args.p
             r = args.r
-            recovery_p = 0.2
+            recovery_p = 0.75
             observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), int(p*d2))
             p = args.sample_entry / d2
             observed_M = torch.from_numpy(observed_M).float().to(device)
             masks = torch.from_numpy(masks).to(device)
-            _, recovery_masks = get_masks(M, recovery_p)
+            #_, recovery_masks = get_uniform_masks(M, recovery_p)
 
             non_zero_rows = torch.any(observed_M != 0, dim=1)
 
@@ -106,7 +107,7 @@ if __name__ == "__main__":
             cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
             cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
             noise_matrix = sym_noise(d2, tau).to(device)
-            print(noise_matrix)
+            #print(noise_matrix)
             T = cov_observe_M / (cov_observe_count/d1) 
             T_masks = 1 * (T!=0)            
             T =  T+noise_matrix
@@ -117,25 +118,27 @@ if __name__ == "__main__":
             T_p = (1.0 / p) * diag_cov + (1.0 / (p**2)) * (cov_observe_M - diag_cov)
             
             
-            U, D, Vt = sparse_svds_for_tensor(T, k=r)
+            U, D, Vt = top_r_svd(T, r=r)
             direct_SVD = U @ torch.diag(D) @ Vt
 
             # impute missing values from rank-r SVD corresponding to masks
 
             #T_masks = 1 * (T != 0)
-            X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
+            X_2, _ = alt_min(T, T_masks, MTM, r)
+            #X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
             X_T, err_estimates = soft_impute(T, T_masks, MTM, r, use_power_method=False, draw=False)
 
             original_err = relative_err(cov_observe_M, MTM)
             T_prob_err = relative_err(T_p, MTM)
             T_freq_err = relative_err(T, MTM)
             direct_SVD_err = relative_err(direct_SVD, MTM)
-            X_original_err = relative_err(X_p, MTM)
+            #X_original_err = relative_err(X_p, MTM)
+            ob2_err = relative_err(X_2, MTM)
             X_T_freq_err = relative_err(X_T, MTM)
 
             estimation_matrix = X_T
 
-            rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
+            #rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
             
             end_time = time.time()
             cost_time = end_time - start_time
@@ -144,9 +147,10 @@ if __name__ == "__main__":
             T_prob_err_list[run].append(T_prob_err)
             T_freq_err_list[run].append(T_freq_err)
             SVD_T_err_list[run].append(direct_SVD_err)
-            X_original_err_list[run].append(X_original_err)
+            #X_original_err_list[run].append(X_original_err)
+            ob2_err_list[run].append(ob2_err)
             err_list[run].append(X_T_freq_err)
-            rmse_list[run].append(rmse_err)
+            #rmse_list[run].append(rmse_err)
 
     original_err_array = np.array(original_err_list)
     print(original_err_array)
@@ -169,6 +173,10 @@ if __name__ == "__main__":
     X_original_err_mean = np.mean(X_original_err_array, axis=0)
     X_original_err_std = np.std(X_original_err_array, axis=0)
 
+    ob2_err_array = np.array(ob2_err_list)
+    ob2_err_mean = np.mean(ob2_err_array, axis=0)
+    ob2_err_std = np.std(ob2_err_array, axis=0)
+
     err_array = np.array(err_list)
     err_mean = np.mean(err_array, axis=0)
     err_std = np.std(err_array, axis=0)
@@ -185,6 +193,7 @@ if __name__ == "__main__":
     results = {
         'args': args,
         'dataset_content': dataset_content,
+        'epsilon_list': epsilon_list,
         'original_err_mean': original_err_mean,
         'original_err_std': original_err_std,
         'T_prob_err_mean': T_prob_err_mean,
@@ -195,6 +204,8 @@ if __name__ == "__main__":
         'SVD_T_err_std': SVD_T_err_std,
         'X_original_err_mean': X_original_err_mean,
         'X_original_err_std': X_original_err_std,
+        'ob2_err_mean': ob2_err_mean,
+        'ob2_err_std': ob2_err_std,
         'err_mean': err_mean,
         'err_std': err_std,
         'rmse_mean': rmse_mean,
@@ -210,8 +221,8 @@ if __name__ == "__main__":
  T_prob_err_err: {T_prob_err_mean[i]:.4f}+-{T_prob_err_std[i]:.4f}\n\
  T_freq_err: {T_freq_err_mean[i]:.4f}+-{T_freq_err_std[i]:.4f}\n\
  SVD_T_err: {SVD_T_err_mean[i]:.4f}+-{SVD_T_err_std[i]:.4f}\n\
- X_original_err: {X_original_err_mean[i]:.4f}+-{X_original_err_std[i]:.4f}\n\
- err: {err_mean[i]:.4f}+-{err_std[i]:.4f}, rmse: {rmse_mean[i]:.4f}+-{rmse_std[i]:.4f}\n"
+ ob2_err: {ob2_err_mean[i]:.4f}+-{ob2_err_std[i]:.4f}\n\
+ err: {err_mean[i]:.4f}+-{err_std[i]:.4f}\n"
     content += '\n'
     print(content)
     # Write the content to a file

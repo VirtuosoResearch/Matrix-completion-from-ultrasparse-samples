@@ -12,6 +12,7 @@ from power_method_svd import power_svd
 from sparse_power_method_svd import power_svd_sparse
 from sparse_utils import *
 from recovery import lstsq_recovery
+from postprocess import *
 
 def main(args, M):
     d1, d2 = M.shape
@@ -24,9 +25,10 @@ def main(args, M):
     elif args.sample == 'perrow':
         observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), args.sample_entry)
         p = args.sample_entry / d2
-    observed_M = torch.from_numpy(observed_M).float().to(device)
-    masks = torch.from_numpy(masks).to(device)
-    _, recovery_masks = get_masks(M, recovery_p)
+        observed_M = torch.from_numpy(observed_M).float().to(device)
+        masks = torch.from_numpy(masks).to(device)
+    #_, recovery_masks = get_masks(M, recovery_p)
+    #print(recovery_masks)
 
     non_zero_rows = torch.any(observed_M != 0, dim=1)
 
@@ -37,24 +39,35 @@ def main(args, M):
 
     start_time = time.time()
 
+    # observed MTM
     cov_observe_M =  observed_M.T @ observed_M
-    #cov_observe_count = (observed_M == 0).float().t() @ (observed_M == 0).float()
-    #diag_cov = torch.diag( torch.diag(cov_observe_M) )
 
+    # freu reweight
+    noise_matrix = sym_noise(d2, args.tau).to(device)
     cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
     cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
-    noise_matrix = sym_noise(d2, args.tau).to(device)
-    T = cov_observe_M / (cov_observe_count/d1) 
+    T_masks = 1 * (cov_observe_M!=0)   
+    cov_observe_M += noise_matrix
+    
+    T = cov_observe_M / (cov_observe_count/d1)
     #T += noise_matrix
     MTM = M.T @ M
-    T_masks = 1 * (T!=0)
 
     mask_err_all = T - MTM
     mask_err_mask = T*T_masks - MTM*T_masks
+    diag_cov = torch.diag( torch.diag(cov_observe_M) )
+    T_p = (1.0 / p) * diag_cov + (1.0 / (p**2)) * (cov_observe_M - diag_cov)
     #mask_err = T*missing_mask_MTM - MTM*missing_mask_MTM
     #mask_err = T - MTM
 
-    print(torch.norm(mask_err_mask, 'fro') / torch.norm(MTM, 'fro'))
+    print('original')
+    print(torch.norm(cov_observe_M*T_masks - MTM*T_masks, 'fro') / torch.norm(MTM*T_masks, 'fro'))
+    print(torch.norm(cov_observe_M - MTM, 'fro') / torch.norm(MTM, 'fro'))
+    print("prob")
+    print(torch.norm(T_p*T_masks - MTM*T_masks, 'fro') / torch.norm(MTM*T_masks, 'fro'))
+    print(torch.norm(T_p - MTM, 'fro') / torch.norm(MTM, 'fro'))
+    print("freq")
+    print(torch.norm(mask_err_mask, 'fro') / torch.norm(MTM*T_masks, 'fro'))
     print(torch.norm(mask_err_all, 'fro') / torch.norm(MTM, 'fro'))
 
     # impute missing values from rank-r SVD corresponding to masks
@@ -62,7 +75,7 @@ def main(args, M):
     train_losses = []
     err_estimates = []
 
-    epochs = 100
+    epochs = 30
     tol = 1e-7
     lr = 0.1
     X = T
@@ -70,6 +83,7 @@ def main(args, M):
     #T_masks = 1 * (T != 0)
     print(T_masks.sum())
     loop = tqdm(range(epochs))
+    """
     for i in loop:
         if not use_power_method:
             U, D, Vt = torch.linalg.svd(X)
@@ -96,6 +110,12 @@ def main(args, M):
         loop.set_description(f"relative err: {relative_err:.7f}")
         err_estimates.append(relative_err.item())
         #print(relative_err)
+    print("X")
+    print(torch.norm(X*T_masks-MTM*T_masks, 'fro') / torch.norm(MTM, 'fro'))
+    print(torch.norm(X-MTM, 'fro') / torch.norm(MTM, 'fro'))
+
+    """
+    X = nuclear_reg(T, T_masks, MTM, r)
 
     plt.figure(figsize=(5, 3))
     plt.plot(err_estimates, label='Relative Error')
@@ -105,10 +125,10 @@ def main(args, M):
     plt.legend()
     plt.savefig(f'../plots/{args.label}-rel-err.png', dpi=150)
     plt.show()
-
-    rmse_err = lstsq_recovery(estimation_goal=X, M=M, masks=masks, r=r, recovery_masks=recovery_masks)
-    
     end_time = time.time()
+    #rmse_err = lstsq_recovery(estimation_goal=X, M=M, masks=masks, r=r, recovery_masks=recovery_masks)
+    
+    
     cost_time = end_time - start_time
 
 
@@ -117,6 +137,7 @@ def main(args, M):
         'err_estmates': err_estimates,
     }
 
+    return 0, 0, cost_time, curve
     return rmse_err, err_estimates[-1], cost_time, curve
 
 
@@ -125,15 +146,15 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     # Controled by parameters
     parser.add_argument("--dataset", type=str, default="syn")
-    parser.add_argument("--sample", type=str, default="perrow")
+    parser.add_argument("--sample", type=str, default="uniform")
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--runs", type=int, default=1)
-    parser.add_argument("--r", type=int, default=5)
-    parser.add_argument("--d1", type=int, default=1000)
+    parser.add_argument("--r", type=int, default=10)
+    parser.add_argument("--d1", type=int, default=10000)
     parser.add_argument("--d2", type=int, default=1000)
-    parser.add_argument("--p", type=float, default=0.1)
+    parser.add_argument("--p", type=float, default=0.01)
     parser.add_argument("--sample_entry", type=int, default=2)
-    parser.add_argument("--epsilon", type=float, default=1)
+    parser.add_argument("--epsilon", type=float, default=20)
     #parser.add_argument("--delta", type=float, default=10e-5)
     parser.add_argument("--mark", type=str, default="none")
     parser.add_argument("--save_weights", action="store_true", default=False)
@@ -196,7 +217,7 @@ if __name__ == "__main__":
         'cost_time_list': cost_time_list,
         'curve': curve
     }
-    torch.save(results, f'../results/results_data/{args.label}.pt')
+    #torch.save(results, f'../results/results_data/{args.label}.pt')
 
     # Define the content in the desired format
     content = f"run times: {args.runs}\nrmse error: {np.mean(rmse_err_list):.4f} +- {np.std(rmse_err_list)}\nestimate error: {np.mean(estimate_err_list):.4f} +- {np.std(estimate_err_list)}\ncost time: {np.mean(cost_time_list):.4f} +- {np.std(cost_time_list)}\n\n"

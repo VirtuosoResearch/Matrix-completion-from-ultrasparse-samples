@@ -21,13 +21,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="syn")
     parser.add_argument("--sample", type=str, default="uniform")
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--r", type=int, default=10)
     parser.add_argument("--d1", type=int, default=1000)
     parser.add_argument("--d2", type=int, default=100)
-    parser.add_argument("--p", type=float, default=0.1)
+    parser.add_argument("--p", type=float, default=0.8)
     parser.add_argument("--sample_entry", type=int, default=2)
-    parser.add_argument("--epsilon", type=float, default=20)
+    parser.add_argument("--epsilon", type=float, default=10)
     #parser.add_argument("--delta", type=float, default=10e-5)
     parser.add_argument("--mark", type=str, default="ours")
     parser.add_argument("--save_weights", action="store_true", default=False)
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     r_str = f'_r{args.r}'
     p_str = f'_p{format(args.p, ".0e")}'
 
-    args.label = "real_sparse_" + args.mark + dataset_str + r_str + p_str
+    args.label = "appdendix_time_real_sparse_" + args.mark + dataset_str + r_str + p_str
 
     if torch.cuda.is_available():
         free_gpu = get_free_gpu()
@@ -56,7 +56,8 @@ if __name__ == "__main__":
     SVD_T_err_list, SVD_T_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     X_original_err_list, X_original_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     X_T_freq_err_list, X_T_freq_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
-    err_list, rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
+    err_list, rmse_list = [], []
+    time_list = []
 
     # dataset
     dataset = args.dataset
@@ -94,8 +95,9 @@ if __name__ == "__main__":
         div_d1 = 1
         div_d2 = 1
     if args.mark == 'mc':
-        div_d1 = 10
-        div_d2 = 6
+        #p = 0.6
+        div_d1 *= 4
+        div_d2 *= 1
     M_dataset = MatrixDataset(M_all, int(d1_all/div_d1)+1, int(d2_all/div_d2)+1)
     matrix_dataloader = DataLoader(
         M_dataset,
@@ -114,6 +116,7 @@ if __name__ == "__main__":
     print(privacy_content)
 
     for run in range(args.runs):
+        torch.manual_seed(run)
         batch_err_list = []
         batch_rmse_list = []
         cost_time = 0
@@ -129,7 +132,7 @@ if __name__ == "__main__":
             print(M.shape)
             batch_size = d1*d2
             observed_M, masks = get_sparse_masks(M, p)
-            _, recovery_masks = get_sparse_masks(M, recovery_p)
+            #_, recovery_masks = get_sparse_masks(M, recovery_p)
             recovery_masks = masks.to_dense().bool().to(device)
             M = M.to_dense()
             M = M.to(device)
@@ -144,7 +147,7 @@ if __name__ == "__main__":
             observed_M = observed_M.to_dense().to(device)
             masks = masks.to_dense().to(device)
             
-            start_time = time.time()
+            
             if args.mark == 'random':
                 batch_err_list.append(0)
                 rmse_err, batch_test_num = lstsq_recovery(estimation_goal=torch.rand(d2, d2).to(device), M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.0001, batch=True)
@@ -160,11 +163,14 @@ if __name__ == "__main__":
                 batch_rmse_list.append(rmse_err*batch_test_num)
                 total_test_num += batch_test_num
             elif args.mark == 'mc':
+                noise_matrix = torch.normal(0, tau, size = (d1, d2)).to(device)
+                start_time = time.time()
                 batch_err_list.append(0)
                 entry_masks = M!=0
+                M += noise_matrix
                 X = vanilla_MC(M, entry_masks, num_entries, r, draw=True)
                 
-                test_masks = entry_masks * masks
+                test_masks = entry_masks * (1-masks)
                 batch_test_num = test_masks.sum()
                 rmse_err = (((X-M)*test_masks)**2).sum()
                 del entry_masks, test_masks
@@ -196,25 +202,9 @@ if __name__ == "__main__":
                 T = cov_observe_M / (cov_observe_count/(d1))
                 T_M = MTM / (cov_M_count/(d1))
 
-
-                # MTM
-                #print("MTM: ", MTM)
-                #print("T: ", T)
-                #print("T_M: ", T_M)
-                
-
-                
-
-                #mask_err_all = T*T_masks - T_M*T_masks
-                #mask_err_all = cov_observe_M - MTM
-                #mask_err_mask = T*ETE - MTM*ETE
-                #mask_err = T*missing_mask_MTM - MTM*missing_mask_MTM
-                #mask_err = T - MTM
-
-                #print(torch.norm(mask_err_mask, 'fro') / torch.norm(MTM, 'fro'))
-                #print(torch.norm(mask_err_all, 'fro') / torch.norm(T_M, 'fro'))
-                # prob reweight
-                
+                #T = T.to_sparse()
+                #T_M = T_M.to_sparse()
+                start_time = time.time()
                 if args.mark == 'svd':
                     U, D, Vt = top_r_svd(T, r=r)
                     direct_SVD = U @ torch.diag(D) @ Vt
@@ -222,10 +212,16 @@ if __name__ == "__main__":
                     X_T = direct_SVD
                     print("svd_err: ", svd_err)
                 elif args.mark == 'ob2':
-                    #X_T, err_estimates = alt_min(T, T_masks, T_M, r, lr=1, draw=True)
-                    X_T, err_estimates = nuclear_reg(T, T_masks, T_M, r, lr=1, draw=True)
+                    X_T, err_estimates = alt_min(T, T_masks, T_M, r, lr=1, draw=True)
+                    #X_T, err_estimates = nuclear_reg(T, T_masks, T_M, r, lr=1, draw=True)
                 elif args.mark == 'ours':
-                    X_T, err_estimates = soft_impute(T, T_masks, T_M, r, use_power_method=False, draw=True)          
+                    #T_M = T_M.to_dense()
+                    X_T, err_estimates = soft_impute(T, T_masks, T_M, r, use_power_method=False, draw=True)
+                    #X_T, err_estimates = sparse_soft_impute(T, T_masks, T_M, TM_masks, r, draw=True)
+                elif args.mark == 'MTMMC':
+                    num_entries = TM_masks.sum()
+                    T_M = T_M.to_dense()
+                    X_T = vanilla_MC(T_M, TM_masks, num_entries, r, draw=True)
                 
 
 
@@ -243,6 +239,7 @@ if __name__ == "__main__":
                 print('batch test number: ', batch_test_num)
                 batch_rmse_list.append(rmse_err*batch_test_num)
                 total_test_num += batch_test_num
+                total_test_num +=0
                 cost_time += end_time - start_time
             
                 
@@ -253,18 +250,23 @@ if __name__ == "__main__":
         batch_err = np.sum(batch_err_list) / all_size
         batch_rmse = np.sqrt(np.sum(batch_rmse_list) / total_test_num)
 
-        err_list[run].append(batch_err)
-        rmse_list[run].append(batch_rmse)
+        err_list.append(batch_err)
+        rmse_list.append(batch_rmse)
+        time_list.append(cost_time)
 
     err_array = np.array(err_list)
     print(err_array)
-    err_mean = np.mean(err_array, axis=0)
+    err_mean = np.mean(err_array)
     print(err_mean)
-    err_std = np.std(err_array, axis=0)
+    err_std = np.std(err_array)
 
     rmse_array = np.array(rmse_list)
-    rmse_mean = np.mean(rmse_array, axis=0)
-    rmse_std = np.std(rmse_array, axis=0)
+    rmse_mean = np.mean(rmse_array)
+    rmse_std = np.std(rmse_array)
+
+    time_array = np.array(time_list)
+    time_mean = np.mean(time_array)
+    time_std = np.std(time_array)
 
     # Get the local time
     local_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -282,8 +284,8 @@ if __name__ == "__main__":
     torch.save(results, f'../results/results_data/{args.label}.pt')
 
     # Define the content in the desired format
-    content = f"run times: {args.runs}, cost: {cost_time}\n"
-    content += f"err: {err_mean[0]:.4f}+-{err_std[0]:.4f}\nrmse err: {rmse_mean[0]:.4f}+-{rmse_std[0]:.4f}\n"
+    content = f"run times: {args.runs}, cost: {time_mean}+-{time_std}\n"
+    content += f"err: {err_mean:.4f}+-{err_std:.4f}\nrmse err: {rmse_mean:.4f}+-{rmse_std:.4f}\n"
     content += '\n'
     print(content)
     # Write the content to a file

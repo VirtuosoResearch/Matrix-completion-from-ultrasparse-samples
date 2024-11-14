@@ -1,0 +1,3 @@
+screen python observed_entries.py --dataset syn --d1 10000 --d2 1000 --r 10 --runs 10
+screen python users.py --dataset syn --d2 1000 --r 10 --runs 10 --p 0.01
+screen python privacy_tradeoff.py --dataset syn --d1 10000 --d2 1000 --r 10 --runs 10 --p 0.01

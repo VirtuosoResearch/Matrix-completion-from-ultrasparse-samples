@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import scipy
+from power_method_svd import *
 
 def sparse_collate_fn(batch):
     """
@@ -333,6 +334,7 @@ def sparse_svds_for_tensor(matrix, k):
         k = min(matrix.shape)
     device = matrix.device
     matrix = matrix.cpu().to_sparse()
+    #matrix = matrix.cpu()
     matrix_scipy = torch_sparse_to_scipy(matrix)
     U_scipy, D_scipy, Vt_scipy = scipy.sparse.linalg.svds(matrix_scipy, k=k)
     U = torch.from_numpy(U_scipy[::-1].copy()).to(device)
@@ -361,6 +363,30 @@ def load_sparse_data_syn(r=5, d1=5000, d2=2000, num_elements=1000, device='cpu')
     Vt = torch.from_numpy(Vt_scipy[::-1].copy()).to(device).to_sparse()
     
     return U @ D @ Vt
+
+def load_sparse_data_syn_2(r=5, d1=5000, d2=2000, num_elements=1000, device='cpu'):
+    X = torch.normal(2, 1, size = (d1, d2)).to(device)
+
+    U, D, Vt = torch.linalg.svd(X, full_matrices=False)
+    D[r:] = 0
+    X = U @ torch.diag(D) @ Vt
+    matrix = U @ torch.diag(D) @ Vt
+    indices = torch.randperm(matrix.numel())[:num_elements]
+
+    # Create a mask with all zeros
+    mask = torch.zeros_like(matrix).view(-1)
+
+    # Set chosen locations in the mask to 1
+    mask[indices] = 1
+
+    # Reshape mask back to the matrix size
+    mask = mask.view(d1, d2)
+
+    # Apply mask to the matrix
+    sparse_matrix = matrix * mask
+    sparse_matrix = sparse_matrix.to_sparse()
+    
+    return sparse_matrix
 
 def get_sparse_masks(M, p):
     original_indices = M.indices()

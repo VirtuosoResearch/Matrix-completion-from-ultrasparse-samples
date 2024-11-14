@@ -15,19 +15,19 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-dataset = 'syn'
+dataset = 'ml-1m'
 d1 = 1000
 d2 = 100
 r = 5
 if dataset == 'syn':
-    _, _, M = load_data_syn(r, d1, d2, device)
+    M = load_data_syn(r, d1, d2, device)
 else:
     M = load_data_all(dataset)
     M = M.float().to(device)
     d1, d2 = M.shape
 dataset_content = f'd1 = {d1}, d2 = {d2}, entries = {torch.count_nonzero(M)}\n'
 print(dataset_content)
-p = 0.1
+p = 0.75
 
 def compute_matrix_adjustment(V):
     # 计算 V^T * V
@@ -54,7 +54,7 @@ def compute_V_tilde(V_tilde):
     使用 SVD 计算矩阵的平方根。
     
     参数：
-    V_tilde -- 输入矩阵，形状为 (n, r)
+    V_tilde -- 输入矩阵，形状为 (d1, r)
     
     返回：
     计算后的矩阵 V
@@ -99,10 +99,10 @@ def generate_symmetric_gaussian_noise(r, Gamma_u, sigma):
     return G_j
 
 def sample_Omega(Omega, k):
-    n, m = Omega.shape
+    d1, d2 = Omega.shape
     sampled_indices = []
     
-    for i in range(n):
+    for i in range(d1):
         # 获取当前行的非零列索引
         non_zero_indices = torch.where(Omega[i] != 0)[0].cpu().numpy()
         # 如果非零列索引数量少于 k，则全选，否则随机选择 k 个
@@ -138,31 +138,31 @@ def P_omega(M, Omega):
     return P
 
 def Aitem(U, Omega, P_Omega_M, k, lambda_, Gamma_u, Gamma_M):
-    n, r = U.shape
-    m = P_Omega_M.shape[1]
-    V = torch.rand(m, r).to(device)
+    d1, r = U.shape
+    d2 = P_Omega_M.shape[1]
+    V = torch.rand(d2, r).to(device)
     Omega_prime = sample_Omega(Omega.T, k)
     
-    for j in range(m):
+    for j in range(d2):
         #G_j = torch.random.normal(0, Gamma_u**4 * sigma**2, (r, r))
         G_j = generate_symmetric_gaussian_noise(r, Gamma_u, sigma).to(device)
         g_j = np.random.normal(0, Gamma_u**2 * Gamma_M**2 * sigma**2, r)
         g_j = torch.from_numpy(g_j).float().to(device)
         X_j = lambda_ * torch.eye(r).to(device) + sum([torch.outer(U[i],U[i]).to(device) for i in Omega_prime[j]]) + G_j
-        #V_j = torch.linalg.lstsq(project_to_psd_cone(X_j), (sum([P_Omega_M[i, j].to(device) * U[i].to(device) for i in Omega_prime[j]])+g_j)).solution
-        V_j = torch.linalg.pinv(project_to_psd_cone(X_j)) @ (sum([P_Omega_M[i, j].to(device) * U[i].to(device) for i in Omega_prime[j]])+g_j)
+        V_j = torch.linalg.lstsq(X_j, (sum([P_Omega_M[i, j].to(device) * U[i].to(device) for i in Omega_prime[j]])+g_j)).solution
+        #V_j = torch.linalg.pinv(project_to_psd_cone(X_j)) @ (sum([P_Omega_M[i, j].to(device) * U[i].to(device) for i in Omega_prime[j]])+g_j)
         #V_j = project_to_psd_cone(torch.linalg.pinv(X_j) @ (sum([P_Omega_M[i, j] * U[i] for i in Omega_prime[j]])+g_j))
         V[j] = V_j
     #print(V)
     #V_tilde = torch.stack(V)
     V_tilde = V
     #VV = matrix_negative_half_power(torch.linalg.pinv(V_tilde.T @ V_tilde))
-    VV = torch.linalg.pinv(project_to_psd_cone(V_tilde.T @ V_tilde))
+    #VV = torch.linalg.pinv(project_to_psd_cone(V_tilde.T @ V_tilde))
     #print(VV)
     #print(torch.linalg.pinv(VV))
     V = compute_V_tilde(V_tilde)
-    return compute_matrix_adjustment(V_tilde)
-    #return V
+    #return compute_matrix_adjustment(V_tilde)
+    return V
     #return V_tilde @ torch.linalg.pinv(V_tilde.T @ V_tilde) ** 0.5
     #return V_tilde @ VV ** 0.5
 
@@ -188,13 +188,13 @@ def Auser(V, Omega_i, P_Omega_M, T, lambda_, Gamma_u):
         u = torch.linalg.solve(A, b)
         
         return u
-    m, r = V.shape
-    U = torch.zeros((n, r)).to(device)
+    d2, r = V.shape
+    U = torch.zeros((d1, r)).to(device)
 
-    nonzero_indices = [torch.where(Omega_i[i] != 0)[0].cpu().numpy() for i in range(n)]
-    Omega_prime_i = [np.random.choice(nonzero_indices[i], size=max(1, len(nonzero_indices[i]) // T), replace=False) for i in range(n)]
+    nonzero_indices = [torch.where(Omega_i[i] != 0)[0].cpu().numpy() for i in range(d1)]
+    Omega_prime_i = [np.random.choice(nonzero_indices[i], size=max(1, len(nonzero_indices[i]) // T), replace=False) for i in range(d1)]
 
-    for i in range(n):
+    for i in range(d1):
         #print((sum([ V[j] for j in Omega_prime_i[i]])).shape)
         X_i = lambda_ * torch.eye(r).to(device) + sum(torch.outer(V[j], V[j]) for j in Omega_prime_i[i])
         u_i = torch.linalg.lstsq(X_i, sum([P_Omega_M[i, j].to(device) * V[j].to(device) for j in Omega_prime_i[i]])).solution
@@ -205,9 +205,9 @@ def Auser(V, Omega_i, P_Omega_M, T, lambda_, Gamma_u):
     return U
 
 def DPALS(P_Omega_M, Omega, sigma, Gamma_u, Gamma_M, T, lambda_, r, k, V0):
-    n, m = P_Omega_M.shape
+    d1, d2 = P_Omega_M.shape
     V_t = V0
-    U_t = torch.rand(n, r).to(device)
+    U_t = torch.rand(d1, r).to(device)
     
     for t in tqdm(range(T)):
         U_t = Auser(V_t, Omega, P_Omega_M, T, lambda_, Gamma_u)
@@ -227,25 +227,29 @@ for sigma in [0.1, 0.01]:
         for Gamma_M in [2,3,4]:
             for T in [5, 10 ,20]:
 """
+
+
 D = M
 for run in range(runs):
-    n, m = D.shape
+    d1, d2 = D.shape
     # 示例初始化
-    Omega = (torch.rand(n, m) <= p).to(device)
-    Omega = Omega * (D!=0)
+    #Omega = (torch.rand(d1, d2).to(device) <= p)
+    #print(Omega.sum())
+    Omega = (D!=0)
+    print(Omega.sum())
     non_zero_rows = torch.any(D * Omega != 0, axis=1)
     M = D[non_zero_rows]
     Omega = Omega[non_zero_rows]
-    n, m = M.shape
+    d1, d2 = M.shape
     
-    sigma = 0.1
-    Gamma_u = 4
+    sigma = 0.001
+    Gamma_u = 2
     Gamma_M = 2
     T = 50
     
     lambda_ = 0.01
-    k = 40
-    V0 = torch.rand(m, r).to(device)  # 初始 V
+    k = 50
+    V0 = torch.rand(d2, r).to(device)  # 初始 V
 
     start_time = time.time()
 
@@ -256,12 +260,12 @@ for run in range(runs):
     num = torch.sum(mask)
     #print(num)
     def P_omega_test(X):
-        return X * (~Omega * mask)
-    def P(X):
-        return X * mask
+        return X * (~Omega)
+    #def P(X):
+    #    return X * mask
     X_estimation = U_final.T @ V_final
-    rand_mat = torch.rand(n,m)
-    rmse_list.append(((torch.norm(P_omega_test(M - X_estimation)))/torch.sqrt(torch.sum((~Omega * mask)))).item())
+    rand_mat = torch.rand(d1,d2)
+    rmse_list.append(((torch.norm(P_omega_test(M - X_estimation)))/torch.sqrt(torch.sum(Omega))).item())
 
     end_time = time.time()
     cost_time = end_time - start_time
@@ -282,8 +286,8 @@ for run in range(runs):
         T_best = T
     """
     
-#print("Final U^T:\n", U_final)
-#print("Final V^T:\n", V_final)
+#print("Final U^T:\d1", U_final)
+#print("Final V^T:\d1", V_final)
 print(np.mean(rmse_list))
 print(np.std(rmse_list))
 print(np.mean(time_list))

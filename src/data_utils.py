@@ -104,6 +104,74 @@ def load_data_all(dataset, s=None):
 
         return sparse_matrix
     
+    elif dataset == 'ml-25m':
+        file_path = data_path+'ml-25m/matrix.pt'
+        if os.path.exists(file_path):
+            sparse_matrix = torch.load(file_path)
+        else:
+            
+            data = pd.read_csv(data_path+'ml-25m/ratings.csv')
+
+            if data['userId'].dtype != 'int':
+                data['userId'] = data['userId'].astype(int)
+
+            movie_encoder = LabelEncoder()
+            data['movieId'] = movie_encoder.fit_transform(data['movieId'])
+            # Ratings should be float, just in case, let's convert
+            data['rating'] = data['rating'].astype(float)
+
+            num_users = data['userId'].nunique()
+            num_movies = data['movieId'].nunique()
+
+            # Create row, col, and data arrays for the sparse matrix
+            row = data['userId'].values
+            col = data['movieId'].values
+            data = data['rating'].values
+            sparse_matrix = coo_matrix((data, (row, col)))
+
+            print("Sparse matrix shape: ", sparse_matrix.shape)
+            print("Non-zero entries: ", sparse_matrix.nnz)
+            print("Number of unique users: ", num_users)
+            print("Number of unique movies: ", num_movies)
+
+            torch.save(sparse_matrix, file_path)
+
+        return sparse_matrix
+    
+    elif dataset == 'ml-20m':
+        file_path = data_path+'ml-20m/matrix.pt'
+        if os.path.exists(file_path):
+            sparse_matrix = torch.load(file_path)
+        else:
+            
+            data = pd.read_csv(data_path+'ml-20m/ratings.csv')
+
+            if data['userId'].dtype != 'int':
+                data['userId'] = data['userId'].astype(int)
+
+            movie_encoder = LabelEncoder()
+            data['movieId'] = movie_encoder.fit_transform(data['movieId'])
+            # Ratings should be float, just in case, let's convert
+            data['rating'] = data['rating'].astype(float)
+
+            num_users = data['userId'].nunique()
+            num_movies = data['movieId'].nunique()
+
+            # Create row, col, and data arrays for the sparse matrix
+            row = data['userId'].values
+            col = data['movieId'].values
+            data = data['rating'].values
+            sparse_matrix = coo_matrix((data, (row, col)))
+
+            print("Sparse matrix shape: ", sparse_matrix.shape)
+            print("Non-zero entries: ", sparse_matrix.nnz)
+            print("Number of unique users: ", num_users)
+            print("Number of unique movies: ", num_movies)
+
+            torch.save(sparse_matrix, file_path)
+
+        return sparse_matrix
+    
     elif dataset == 'netflix':
         df = pd.read_csv(
             data_path+"netflixdata.csv",
@@ -185,7 +253,8 @@ def load_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
 
 def get_masks(M, p):
     d1, d2 = M.shape
-    k = int(d2*p)
+    k = int(d1*d2*p)
+    print(k)
     non_zero_indices = torch.nonzero(M, as_tuple=False)
     sampled_indices = non_zero_indices[torch.randperm(non_zero_indices.size(0))[:k]]
     masks = torch.zeros_like(M, dtype=int)
@@ -199,6 +268,14 @@ def get_masks(M, p):
         print("Non-zero elements are correctly aligned with the mask.")
     else:
         print("Non-zero elements do not align correctly with the mask.")
+    return observed_M, masks
+
+def get_uniform_masks(M, p):
+    M_shape = M.shape
+    masks = torch.rand(M_shape[0], M_shape[1]).to(M.device) <= p
+	#observed_M = np.multiply(M, masks)
+    observed_M = M * masks
+
     return observed_M, masks
 
 def set_random_zeros(matrix, ratio):

@@ -11,7 +11,7 @@ from data_utils import *
 from power_method_svd import power_svd
 from sparse_power_method_svd import power_svd_sparse
 from sparse_utils import *
-from recovery import lstsq_recovery
+from recovery import lstsq_recovery, vanilla_MC
 from postprocess import *
 
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     r_str = f'_r{args.r}'
     p_str = f'_p{format(args.p, ".0e")}'
 
-    args.label = "ob2_2_" +  dataset_str + r_str + p_str
+    args.label = "mcmtm_ob2_2_" +  dataset_str + r_str + p_str
 
     if torch.cuda.is_available():
         free_gpu = get_free_gpu()
@@ -54,10 +54,12 @@ if __name__ == "__main__":
     T_prob_err_list, T_prob_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     T_freq_err_list, T_freq_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     SVD_T_err_list, SVD_T_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
+    SVD_MTM_err_list, SVD_MTM_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     X_original_err_list, X_original_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     ob2_err_list, ob2_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     X_T_freq_err_list, X_T_freq_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     err_list, rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
+    oracle_err_list, oracle_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
 
     #users_list = [1000, 2000, 6000, 10000, 20000, 50000]
     users_list = [5000, 10000, 20000, 30000, 50000, 70000]
@@ -122,27 +124,33 @@ if __name__ == "__main__":
             
             U, D, Vt = top_r_svd(T, r)
             direct_SVD = U @ torch.diag(D) @ Vt
+            U, D, Vt = top_r_svd(MTM, r=r)
+            SVD_MTM = U @ torch.diag(D) @ Vt
 
             # impute missing values from rank-r SVD corresponding to masks
 
             #T_masks = 1 * (T != 0)
-            X_2, _ = alt_min(T, T_masks, MTM, r, draw=False)
-            X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
-            X_T, err_estimates = soft_impute(T, T_masks, MTM, r, use_power_method=False, draw=False)
+            num_entries = d1*d2
+            X_T = vanilla_MC(cov_observe_M, None, num_entries, r,epochs=300, draw=True)
+            X_oracle = vanilla_MC(MTM, None, num_entries, r,epochs=500, draw=True)
 
             original_err = relative_err(cov_observe_M, MTM)
             T_prob_err = relative_err(T_p, MTM)
             T_freq_err = relative_err(T, MTM)
             direct_SVD_err = relative_err(direct_SVD, MTM)
-            X_original_err = relative_err(X_p, MTM)
-            ob2_err = relative_err(X_2, MTM)
+            SVD_MTM_err = relative_err(SVD_MTM, MTM)
+            #X_original_err = relative_err(X_p, MTM)
+            #ob2_err = relative_err(X_2, MTM)
             X_T_freq_err = relative_err(X_T, MTM)
+            oracle_err = relative_err(X_oracle, MTM)
 
             estimation_matrix = X_T
             lam = 0.001
-            T_rmse_err = lstsq_recovery(estimation_goal=direct_SVD, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
-            ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            #T_rmse_err = lstsq_recovery(estimation_goal=T, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            #ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
             rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            oracle_rmse_err = lstsq_recovery(estimation_goal=X_oracle, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            SVD_MTM_rmse_err = lstsq_recovery(estimation_goal=SVD_MTM, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
             
             end_time = time.time()
             cost_time = end_time - start_time
@@ -150,12 +158,16 @@ if __name__ == "__main__":
             original_err_list[run].append(original_err)
             T_prob_err_list[run].append(T_prob_err)
             T_freq_err_list[run].append(T_freq_err)
-            T_freq_rmse_list[run].append(T_rmse_err)
-            SVD_T_err_list[run].append(direct_SVD_err)
+            SVD_MTM_err_list[run].append(SVD_MTM_err)
+            SVD_MTM_rmse_list[run].append(SVD_MTM_rmse_err)
+            #T_freq_rmse_list[run].append(T_rmse_err)
+            #SVD_T_err_list[run].append(direct_SVD_err)
             #SVD_T_rmse_list[run].append(SVD_T_rmse_err)
-            X_original_err_list[run].append(X_original_err)
-            ob2_err_list[run].append(ob2_err)
-            ob2_rmse_list[run].append(ob2_rmse_err)
+            #ob2_err_list[run].append(ob2_err)
+            #ob2_rmse_list[run].append(ob2_rmse_err)
+            oracle_err_list[run].append(oracle_err)
+            oracle_rmse_list[run].append(oracle_rmse_err)
+            #X_original_err_list[run].append(X_original_err)
             err_list[run].append(X_T_freq_err)
             rmse_list[run].append(rmse_err)
 
@@ -184,6 +196,14 @@ if __name__ == "__main__":
     SVD_T_rmse_mean = np.mean(SVD_T_rmse_array, axis=0)
     SVD_T_rmse_std = np.std(SVD_T_rmse_array, axis=0)
 
+    SVD_MTM_err_array = np.array(SVD_MTM_err_list)
+    SVD_MTM_err_mean = np.mean(SVD_MTM_err_array, axis=0)
+    SVD_MTM_err_std = np.std(SVD_MTM_err_array, axis=0)
+
+    SVD_MTM_rmse_array = np.array(SVD_MTM_rmse_list)
+    SVD_MTM_rmse_mean = np.mean(SVD_MTM_rmse_array, axis=0)
+    SVD_MTM_rmse_std = np.std(SVD_MTM_rmse_array, axis=0)
+
     X_original_err_array = np.array(X_original_err_list)
     X_original_err_mean = np.mean(X_original_err_array, axis=0)
     X_original_err_std = np.std(X_original_err_array, axis=0)
@@ -195,6 +215,14 @@ if __name__ == "__main__":
     ob2_rmse_array = np.array(ob2_rmse_list)
     ob2_rmse_mean = np.mean(ob2_rmse_array, axis=0)
     ob2_rmse_std = np.std(ob2_rmse_array, axis=0)
+
+    oracle_err_array = np.array(oracle_err_list)
+    oracle_err_mean = np.mean(oracle_err_array, axis=0)
+    oracle_err_std = np.std(oracle_err_array, axis=0)
+
+    oracle_rmse_array = np.array(oracle_rmse_list)
+    oracle_rmse_mean = np.mean(oracle_rmse_array, axis=0)
+    oracle_rmse_std = np.std(oracle_rmse_array, axis=0)
 
     err_array = np.array(err_list)
     err_mean = np.mean(err_array, axis=0)
@@ -225,12 +253,18 @@ if __name__ == "__main__":
         'SVD_T_err_std': SVD_T_err_std,
         'SVD_T_rmse_mean': SVD_T_rmse_mean,
         'SVD_T_rmse_std': SVD_T_rmse_std,
+        'SVD_MTM_err_mean': SVD_MTM_err_mean,
+        'SVD_MTM_err_std': SVD_MTM_err_std,
+        'SVD_MTM_rmse_mean': SVD_MTM_rmse_mean,
+        'SVD_MTM_rmse_std': SVD_MTM_rmse_std,
         'X_original_err_mean': X_original_err_mean,
         'X_original_err_std': X_original_err_std,
         'ob2_err_mean': ob2_err_mean,
         'ob2_err_std': ob2_err_std,
         'ob2_rmse_mean': ob2_rmse_mean,
         'ob2_rmse_std': ob2_rmse_std,
+        'oracle_err_mean': oracle_err_mean,
+        'oracle_rmse_mean': oracle_rmse_mean,
         'err_mean': err_mean,
         'err_std': err_std,
         'rmse_mean': rmse_mean,
@@ -241,13 +275,9 @@ if __name__ == "__main__":
     # Define the content in the desired format
     content = f"run times: {args.runs}\n"
     for i, d1 in enumerate(users_list):
-        content += f"rows: {d1}:\n\
- original_err: {original_err_mean[i]:.4f}+-{original_err_std[i]:.4f}\n\
- T_prob_err_err: {T_prob_err_mean[i]:.4f}+-{T_prob_err_std[i]:.4f}\n\
- T_freq_err: {T_freq_err_mean[i]:.4f}+-{T_freq_err_std[i]:.4f}, T_freq_rmse: {T_freq_rmse_mean[i]:.4f}+-{T_freq_rmse_std[i]:.4f}\n\
- SVD_T_err: {SVD_T_err_mean[i]:.4f}+-{SVD_T_err_std[i]:.4f}\n\
- X_original_err: {X_original_err_mean[i]:.4f}+-{X_original_err_std[i]:.4f}\n\
- ob2_err: {ob2_err_mean[i]:.4f}+-{ob2_err_std[i]:.4f}, ob2_rmse: {ob2_rmse_mean[i]:.4f}+-{ob2_rmse_std[i]:.4f}\n\
+        content += f"d1 {d1}:\n\
+ oracle_err: {oracle_err_mean[i]:.4f}+-{oracle_err_std[i]:.4f}, oracle_rmse: {oracle_rmse_mean[i]:.4f}+-{oracle_rmse_std[i]:.4f}\n\
+ SVD_MTM_err: {SVD_MTM_err_mean[i]:.4f}+-{SVD_MTM_err_std[i]:.4f}, SVD_MTM_rmse: {SVD_MTM_rmse_mean[i]:.4f}+-{SVD_MTM_rmse_std[i]:.4f}\n\
  err: {err_mean[i]:.4f}+-{err_std[i]:.4f}, rmse: {rmse_mean[i]:.4f}+-{rmse_std[i]:.4f}\n"
     content += '\n'
     print(content)

@@ -60,7 +60,7 @@ if __name__ == "__main__":
     err_list, rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
 
     #users_list = [1000, 2000, 6000, 10000, 20000, 50000]
-    users_list = [5000, 10000, 20000, 50000, 10000]
+    users_list = [1000, 3000, 5000, 7000, 10000, 20000]
     for d1 in users_list:
         # dataset
         dataset = args.dataset
@@ -88,12 +88,12 @@ if __name__ == "__main__":
             d1, d2 = M.shape
             p = args.p
             r = args.r
-            recovery_p = 0.5
+            recovery_p = 0.75
             observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), int(p*d2))
             p = args.sample_entry / d2
             observed_M = torch.from_numpy(observed_M).float().to(device)
             masks = torch.from_numpy(masks).to(device)
-            _, recovery_masks = get_masks(M, recovery_p)
+            _, recovery_masks = get_uniform_masks(M, recovery_p)
 
             non_zero_rows = torch.any(observed_M != 0, dim=1)
 
@@ -116,7 +116,7 @@ if __name__ == "__main__":
             T_p = (1.0 / p) * diag_cov + (1.0 / (p**2)) * (cov_observe_M - diag_cov)
             
             
-            U, D, Vt = sparse_svds_for_tensor(T, k=r)
+            U, D, Vt = top_r_svd(T, r=r)
             direct_SVD = U @ torch.diag(D) @ Vt
 
             # impute missing values from rank-r SVD corresponding to masks
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # Define the content in the desired format
     content = f"run times: {args.runs}\n"
     for i, d1 in enumerate(users_list):
-        content += f"rows: {d2}:\n\
+        content += f"rows: {d1}:\n\
  original_err: {original_err_mean[i]:.4f}+-{original_err_std[i]:.4f}\n\
  T_prob_err_err: {T_prob_err_mean[i]:.4f}+-{T_prob_err_std[i]:.4f}\n\
  T_freq_err: {T_freq_err_mean[i]:.4f}+-{T_freq_err_std[i]:.4f}\n\

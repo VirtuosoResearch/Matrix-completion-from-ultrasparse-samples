@@ -6,8 +6,8 @@ import torch
 from torch import optim
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
+#from sklearn.preprocessing import StandardScaler
+#from sklearn.decomposition import PCA
 
 from sparse_utils import sparse_svds_for_tensor
 

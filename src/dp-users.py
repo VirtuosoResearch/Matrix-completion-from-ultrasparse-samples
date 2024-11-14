@@ -21,13 +21,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="syn")
     parser.add_argument("--sample", type=str, default="uniform")
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--r", type=int, default=10)
     parser.add_argument("--d1", type=int, default=1000)
     parser.add_argument("--d2", type=int, default=250)
-    parser.add_argument("--p", type=float, default=0.1)
+    parser.add_argument("--p", type=float, default=0.01)
     parser.add_argument("--sample_entry", type=int, default=2)
-    parser.add_argument("--epsilon", type=float, default=10)
+    parser.add_argument("--epsilon", type=float, default=1)
     #parser.add_argument("--delta", type=float, default=10e-5)
     parser.add_argument("--mark", type=str, default="none")
     parser.add_argument("--save_weights", action="store_true", default=False)
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     r_str = f'_r{args.r}'
     p_str = f'_p{format(args.p, ".0e")}'
 
-    args.label = "ob2_2_" +  dataset_str + r_str + p_str
+    args.label = "dp_users_" +  dataset_str + r_str + p_str
 
     if torch.cuda.is_available():
         free_gpu = get_free_gpu()
@@ -60,104 +60,99 @@ if __name__ == "__main__":
     err_list, rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
 
     #users_list = [1000, 2000, 6000, 10000, 20000, 50000]
-    users_list = [5000, 10000, 20000, 30000, 50000, 70000]
-    #users_list = [30000]
-    #users_list = [70000]
+    #users_list = [1000, 3000, 5000, 7000, 10000, 20000]
+    users_list = [500, 1000, 5000, 10000, 20000]
+    epsilon_list = [0.5, 1, 2, 10, 20]
     for d1 in users_list:
-        # dataset
-        dataset = args.dataset
-        print(dataset)
-        if dataset == 'syn':
-            d2 = args.d2
-            M = load_data_syn(args.r, d1, d2, device)
-        else:
-            M = load_data_all(dataset)
-            M = M.float().to(device)
-            d1, d2 = M.shape
-        dataset_content = f'd1 = {d1}, d2 = {d2}, entries = {torch.count_nonzero(M)}\n'
-        print(dataset_content)
+        for epsilon in epsilon_list:
+            # dataset
+            dataset = args.dataset
+            print(dataset)
+            if dataset == 'syn':
+                d2 = args.d2
+                M = load_data_syn(args.r, d1, d2, device)
+            else:
+                M = load_data_all(dataset)
+                M = M.float().to(device)
+                d1, d2 = M.shape
+            dataset_content = f'd1 = {d1}, d2 = {d2}, entries = {torch.count_nonzero(M)}\n'
+            print(dataset_content)
 
-        # privacy
-        delta = 1/d1
-        args.tau = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/args.epsilon
-        privacy_content = f'epsilon = {args.epsilon}, delta = {delta}, args.tau = {args.tau}\n'
-        print(privacy_content)
+            # privacy
+            delta = 1/d1
+            tau = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/epsilon
+            privacy_content = f'epsilon = {epsilon}, delta = {delta}, args.tau = {tau}\n'
+            print(privacy_content)
 
-        
-
-        for run in range(args.runs):
-            # main part
-            d1, d2 = M.shape
-            p = 2 / d2
-            r = args.r
-            recovery_p = 0.65
-            observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), 2)
-            p = args.sample_entry / d2
-            observed_M = torch.from_numpy(observed_M).float().to(device)
-            masks = torch.from_numpy(masks).to(device)
-            _, recovery_masks = get_uniform_masks(M, recovery_p)
-            recovery_masks = recovery_masks.to(bool)
-
-            non_zero_rows = torch.any(observed_M != 0, dim=1)
-
-            start_time = time.time()
-
-            # observed MTM
-            cov_observe_M =  observed_M.T @ observed_M
-
-            # freu reweight
-            noise_matrix = sym_noise(d2, args.tau).to(device)
-            cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
-            cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
-            T_masks = 1 * (cov_observe_M!=0)   
-            cov_observe_M += noise_matrix
             
-            T = cov_observe_M / (cov_observe_count/d1)
-            # MTM
-            MTM = M.T @ M
-            # prob reweight
-            diag_cov = torch.diag( torch.diag(cov_observe_M) )
-            T_p = (1.0 / p) * diag_cov + (1.0 / (p**2)) * (cov_observe_M - diag_cov)
-            
-            
-            U, D, Vt = top_r_svd(T, r)
-            direct_SVD = U @ torch.diag(D) @ Vt
 
-            # impute missing values from rank-r SVD corresponding to masks
+            for run in range(args.runs):
+                # main part
+                d1, d2 = M.shape
+                p = args.p
+                r = args.r
+                recovery_p = 0.75
+                observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), 2)
+                p = args.sample_entry / d2
+                observed_M = torch.from_numpy(observed_M).float().to(device)
+                masks = torch.from_numpy(masks).to(device)
+                _, recovery_masks = get_uniform_masks(M, recovery_p)
 
-            #T_masks = 1 * (T != 0)
-            X_2, _ = alt_min(T, T_masks, MTM, r, draw=False)
-            X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
-            X_T, err_estimates = soft_impute(T, T_masks, MTM, r, use_power_method=False, draw=False)
+                non_zero_rows = torch.any(observed_M != 0, dim=1)
 
-            original_err = relative_err(cov_observe_M, MTM)
-            T_prob_err = relative_err(T_p, MTM)
-            T_freq_err = relative_err(T, MTM)
-            direct_SVD_err = relative_err(direct_SVD, MTM)
-            X_original_err = relative_err(X_p, MTM)
-            ob2_err = relative_err(X_2, MTM)
-            X_T_freq_err = relative_err(X_T, MTM)
+                start_time = time.time()
 
-            estimation_matrix = X_T
-            lam = 0.001
-            T_rmse_err = lstsq_recovery(estimation_goal=direct_SVD, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
-            ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
-            rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
-            
-            end_time = time.time()
-            cost_time = end_time - start_time
+                # observed MTM
+                cov_observe_M =  observed_M.T @ observed_M
+                noise_matrix = sym_noise(d2, tau).to(device)
+                T_masks = 1 * (cov_observe_M!=0)   
 
-            original_err_list[run].append(original_err)
-            T_prob_err_list[run].append(T_prob_err)
-            T_freq_err_list[run].append(T_freq_err)
-            T_freq_rmse_list[run].append(T_rmse_err)
-            SVD_T_err_list[run].append(direct_SVD_err)
-            #SVD_T_rmse_list[run].append(SVD_T_rmse_err)
-            X_original_err_list[run].append(X_original_err)
-            ob2_err_list[run].append(ob2_err)
-            ob2_rmse_list[run].append(ob2_rmse_err)
-            err_list[run].append(X_T_freq_err)
-            rmse_list[run].append(rmse_err)
+                # freu reweight
+                cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
+                cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
+                cov_observe_M += noise_matrix
+                T = cov_observe_M / (cov_observe_count/d1)           
+                # MTM
+                MTM = M.T @ M
+                # prob reweight
+                diag_cov = torch.diag( torch.diag(cov_observe_M) )
+                T_p = (1.0 / p) * diag_cov + (1.0 / (p**2)) * (cov_observe_M - diag_cov)
+                
+                
+                U, D, Vt = top_r_svd(T, r=r)
+                direct_SVD = U @ torch.diag(D) @ Vt
+
+                # impute missing values from rank-r SVD corresponding to masks
+
+                #T_masks = 1 * (T != 0)
+                X_2, _ = alt_min(T, T_masks, MTM, r)
+                #X_p, _ = soft_impute(cov_observe_M+noise_matrix, T_masks, MTM, r, use_power_method=False, draw=False)
+                X_T, err_estimates = soft_impute(T, T_masks, MTM, r, use_power_method=False, draw=False)
+
+                original_err = relative_err(cov_observe_M, MTM)
+                T_prob_err = relative_err(T_p, MTM)
+                T_freq_err = relative_err(T, MTM)
+                direct_SVD_err = relative_err(direct_SVD, MTM)
+                #X_original_err = relative_err(X_p, MTM)
+                ob2_err = relative_err(X_2, MTM)
+                X_T_freq_err = relative_err(X_T, MTM)
+
+                estimation_matrix = X_T
+                ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
+                rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
+                
+                end_time = time.time()
+                cost_time = end_time - start_time
+
+                original_err_list[run].append(original_err)
+                T_prob_err_list[run].append(T_prob_err)
+                T_freq_err_list[run].append(T_freq_err)
+                SVD_T_err_list[run].append(direct_SVD_err)
+                #X_original_err_list[run].append(X_original_err)
+                ob2_err_list[run].append(ob2_err)
+                ob2_rmse_list[run].append(ob2_rmse_err)
+                err_list[run].append(X_T_freq_err)
+                rmse_list[run].append(rmse_err)
 
     original_err_array = np.array(original_err_list)
     print(original_err_array)
@@ -172,17 +167,9 @@ if __name__ == "__main__":
     T_freq_err_mean = np.mean(T_freq_err_array, axis=0)
     T_freq_err_std = np.std(T_freq_err_array, axis=0)
 
-    T_freq_rmse_array = np.array(T_freq_rmse_list)
-    T_freq_rmse_mean = np.mean(T_freq_rmse_array, axis=0)
-    T_freq_rmse_std = np.std(T_freq_rmse_array, axis=0)
-
     SVD_T_err_array = np.array(SVD_T_err_list)
     SVD_T_err_mean = np.mean(SVD_T_err_array, axis=0)
     SVD_T_err_std = np.std(SVD_T_err_array, axis=0)
-
-    SVD_T_rmse_array = np.array(SVD_T_rmse_list)
-    SVD_T_rmse_mean = np.mean(SVD_T_rmse_array, axis=0)
-    SVD_T_rmse_std = np.std(SVD_T_rmse_array, axis=0)
 
     X_original_err_array = np.array(X_original_err_list)
     X_original_err_mean = np.mean(X_original_err_array, axis=0)
@@ -212,6 +199,7 @@ if __name__ == "__main__":
     results = {
         'args': args,
         'user_list': users_list,
+        'epsilon_list': epsilon_list,
         'dataset_content': dataset_content,
         'original_err_mean': original_err_mean,
         'original_err_std': original_err_std,
@@ -219,12 +207,8 @@ if __name__ == "__main__":
         'T_prob_err_std': T_prob_err_std,
         'T_freq_err_mean': T_freq_err_mean,
         'T_freq_err_std': T_freq_err_std,
-        'T_freq_rmse_mean': T_freq_rmse_mean,
-        'T_freq_rmse_std': T_freq_rmse_std,
         'SVD_T_err_mean': SVD_T_err_mean,
         'SVD_T_err_std': SVD_T_err_std,
-        'SVD_T_rmse_mean': SVD_T_rmse_mean,
-        'SVD_T_rmse_std': SVD_T_rmse_std,
         'X_original_err_mean': X_original_err_mean,
         'X_original_err_std': X_original_err_std,
         'ob2_err_mean': ob2_err_mean,
@@ -244,9 +228,8 @@ if __name__ == "__main__":
         content += f"rows: {d1}:\n\
  original_err: {original_err_mean[i]:.4f}+-{original_err_std[i]:.4f}\n\
  T_prob_err_err: {T_prob_err_mean[i]:.4f}+-{T_prob_err_std[i]:.4f}\n\
- T_freq_err: {T_freq_err_mean[i]:.4f}+-{T_freq_err_std[i]:.4f}, T_freq_rmse: {T_freq_rmse_mean[i]:.4f}+-{T_freq_rmse_std[i]:.4f}\n\
+ T_freq_err: {T_freq_err_mean[i]:.4f}+-{T_freq_err_std[i]:.4f}\n\
  SVD_T_err: {SVD_T_err_mean[i]:.4f}+-{SVD_T_err_std[i]:.4f}\n\
- X_original_err: {X_original_err_mean[i]:.4f}+-{X_original_err_std[i]:.4f}\n\
  ob2_err: {ob2_err_mean[i]:.4f}+-{ob2_err_std[i]:.4f}, ob2_rmse: {ob2_rmse_mean[i]:.4f}+-{ob2_rmse_std[i]:.4f}\n\
  err: {err_mean[i]:.4f}+-{err_std[i]:.4f}, rmse: {rmse_mean[i]:.4f}+-{rmse_std[i]:.4f}\n"
     content += '\n'
