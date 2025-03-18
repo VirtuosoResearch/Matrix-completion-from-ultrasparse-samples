@@ -1,0 +1,45 @@
+local time: 2025-03-17 23:45:13
+d1 = 30000, d2 = 1000, entries = 30000000
+epsilon = 10, delta = 3.3333333333333335e-05, args.tau = 0.4589574337005615
+run times: 3
+rows: 1000:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 61.0367+-0.2417
+ T_freq_err: 0.9724+-0.0000, T_freq_rmse: 0.6991+-0.0095
+ SVD_T_err: 0.9472+-0.0001
+ X_original_err: 0.9993+-0.0000
+ ob2_err: 0.9472+-0.0001, ob2_rmse: 0.6988+-0.0082
+ err: 0.3516+-0.0022, rmse: 0.3426+-0.0022
+rows: 5000:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 29.5872+-0.0239
+ T_freq_err: 0.8701+-0.0001, T_freq_rmse: 0.3100+-0.0020
+ SVD_T_err: 0.7619+-0.0001
+ X_original_err: 0.9997+-0.0000
+ ob2_err: 0.7565+-0.0001, ob2_rmse: 0.3059+-0.0014
+ err: 0.0604+-0.0003, rmse: 0.1390+-0.0001
+rows: 10000:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 22.8629+-0.0126
+ T_freq_err: 0.7574+-0.0001, T_freq_rmse: 0.2129+-0.0010
+ SVD_T_err: 0.5812+-0.0002
+ X_original_err: 0.9999+-0.0000
+ ob2_err: 0.5774+-0.0002, ob2_rmse: 0.2145+-0.0006
+ err: 0.0605+-0.0001, rmse: 0.1256+-0.0001
+rows: 20000:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 18.5859+-0.0089
+ T_freq_err: 0.5738+-0.0002, T_freq_rmse: 0.1469+-0.0008
+ SVD_T_err: 0.3405+-0.0003
+ X_original_err: 0.9999+-0.0000
+ ob2_err: 0.3347+-0.0007, ob2_rmse: 0.1498+-0.0007
+ err: 0.0629+-0.0002, rmse: 0.1162+-0.0002
+rows: 30000:
+ original_err: 0.9999+-0.0000
+ T_prob_err_err: 16.9437+-0.0035
+ T_freq_err: 0.4361+-0.0002, T_freq_rmse: 0.1257+-0.0003
+ SVD_T_err: 0.2032+-0.0001
+ X_original_err: 0.9999+-0.0000
+ ob2_err: 0.1950+-0.0014, ob2_rmse: 0.1299+-0.0008
+ err: 0.0612+-0.0001, rmse: 0.1123+-0.0002
+
