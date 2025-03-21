@@ -15,11 +15,11 @@ def load_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
     return X
 
 def load_data_all(dataset, s=None):
-    data_path = '../data/'
+    data_path = './data/'
     if dataset == 'ml-32m':
         file_path = data_path+'ml-32m/matrix.pt'
         if os.path.exists(file_path):
-            sparse_matrix = torch.load(file_path)
+            sparse_matrix = torch.load(file_path, weights_only=False)
         else:
             
             data = pd.read_csv(data_path+'ml-32m/ratings.csv')
@@ -52,7 +52,7 @@ def load_data_all(dataset, s=None):
     elif dataset == 'ml-25m':
         file_path = data_path+'ml-25m/matrix.pt'
         if os.path.exists(file_path):
-            sparse_matrix = torch.load(file_path)
+            sparse_matrix = torch.load(file_path, weights_only=False)
         else:
             
             data = pd.read_csv(data_path+'ml-25m/ratings.csv')
@@ -85,7 +85,7 @@ def load_data_all(dataset, s=None):
     elif dataset == 'ml-20m':
         file_path = data_path+'ml-20m/matrix.pt'
         if os.path.exists(file_path):
-            sparse_matrix = torch.load(file_path)
+            sparse_matrix = torch.load(file_path, weights_only=False)
         else:
             
             data = pd.read_csv(data_path+'ml-20m/ratings.csv')

@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from utils import *
 from power_method_svd import power_svd
+from src.baseline.softimpute_als import SoftImpute
 
 def sparse_collate_fn(batch):
     return batch
@@ -84,6 +85,7 @@ def lstsq_recovery(estimation_goal, M, masks, r, recovery_masks, use_reg=False, 
     total_num = 0
     U = []
     _, S, V = top_r_svd(estimation_goal, r)
+    V = V.float()
     for i in tqdm(range(M.shape[0])):
         """
         M_row: 1*d2
@@ -151,7 +153,7 @@ if __name__ == "__main__":
     # Controled by parameters
     parser.add_argument("--dataset", type=str, default="movielens")
     parser.add_argument("--sample", type=str, default="uniform")
-    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--r", type=int, default=10)
     parser.add_argument("--d1", type=int, default=1000)
     parser.add_argument("--d2", type=int, default=100)
@@ -167,11 +169,12 @@ if __name__ == "__main__":
         device = 'cpu'
 
     err_list, rmse_list = [], []
+    imp_err_list = []
 
     # dataset
     dataset = args.dataset
     print(dataset)
-
+    label = "softimputeals_sparse_dataset" + dataset
     M_all = load_data_all(dataset)
     d1_all, d2_all = M_all.shape
     all_size = d1_all * d2_all
@@ -202,12 +205,13 @@ if __name__ == "__main__":
     epsilon = args.epsilon
     delta = 1/d1_all
     sigma = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/epsilon
-
+    time_list = []
     # main part
     for run in range(args.runs):
         torch.manual_seed(run)
         batch_err_list = []
         batch_rmse_list = []
+        batch_imp_err_list = []
         cost_time = 0
         
         r = args.r
@@ -225,56 +229,75 @@ if __name__ == "__main__":
             M = M.to(device)
 
             print("Sparse ratio: ", num_entries/batch_size)
+            start_time = time.time()
 
             observed_M = observed_M.to_dense().to(device)
             masks = masks.to_dense().to(device)
             
-            # observed second-moment matrix
-            cov_observe_M =  observed_M.T @ observed_M
-            MTM = M.T @ M
-            #print(cov_observe_M)
+            cov_M_count = (1 * (M != 0)).float().T @ (1 * (M != 0).float())
+            cov_M_count = cov_M_count + (cov_M_count == 0) * 1
+            cov_M_count = cov_M_count.cpu().numpy()
 
-            # Inverse estimated probability weighting & privacy injection
+            # observed second-moment matrix
+            M = M.cpu().numpy()
+            sparse_mask = (M != 0).astype(bool)
+            missing_mask = (masks == 0).cpu().numpy()
+            missing_mask = missing_mask.astype(bool)
+            M_obs = M.copy()
+            M_obs[missing_mask] = np.nan
+            print("missing ratio: ", (missing_mask*sparse_mask).sum()/batch_size)
+            clf = SoftImpute(J=10)
+            print(M_obs)
+            fit = clf.fit(M_obs)
+            X_test = M_obs.copy()
+            X_imp = clf.predict(X_test)
+            X_imp[~sparse_mask] = 0
+
+            batch_imp_err = np.sum((X_imp[missing_mask] - M[missing_mask])**2)
+            batch_imp_err_list.append(batch_imp_err)
+            print('batch imp err: ', np.sqrt(batch_imp_err / (missing_mask*sparse_mask).sum()))
+
+            # observed second-moment matrix
+            M = torch.from_numpy(M).to(device)
+            X_imp = torch.from_numpy(X_imp).to(device)
+            MTM = M.T @ M
+            T = X_imp.T @ X_imp
+            
+            cov_observe_M =  observed_M.T @ observed_M
+            #cov_observe_M = cov_observe_M.cpu().numpy()
             cov_M_count = (1 * (M != 0)).float().T @ (1 * (M != 0).float())
             cov_M_count = cov_M_count + (cov_M_count == 0) * 1
             cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
             cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
+            """
             noise_matrix = sym_noise(d2, sigma).to(device)
             T_masks = 1*(cov_observe_M!=0)
             S_masks = 1*(MTM!=0)
             #cov_observe_M += noise_matrix
-            T = cov_observe_M / (cov_observe_count/(d1))
+            MTM_ob = cov_observe_M / (cov_observe_count/(d1))
             S = MTM / (cov_M_count/(d1))
-
-            # impute missing values from rank-r SVD corresponding to masks
-            print('Imputing...')
-            train_losses = []
-            err_estimates = []
-            epochs = 100
-            tol = 1e-7
-            lr = 0.1
-            X = T
-            loop = tqdm(range(epochs))
-            for i in loop:
-                U, D, Vt = power_svd(X, k=r)
-                X_update = U @ torch.diag(D) @ Vt
-                X = T * T_masks + X_update * (1 - T_masks)
-                err = S - X
-                relative_err = torch.norm(err, 'fro') / torch.norm(S, 'fro')
-                if len(err_estimates) > 1:
-                    if err_estimates[-1] > err_estimates[-2]:
-                        break
-                if i > 10:
-                    if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
-                        break
-                last_err = relative_err
-                loop.set_description(f"Error: {relative_err:.7f}")
-                err_estimates.append(relative_err.item())
-            estimation_matrix = X
-            batch_err_list.append(err_estimates[-1]*batch_size)
+            MTM_ob = MTM_ob.cpu().numpy()
+            MTM_missing_mask = (T_masks == 0).cpu().numpy()
+            MTM_missing_mask = MTM_missing_mask.astype(bool)
+            MTM_ob[MTM_missing_mask] = np.nan
+            fit = clf.fit(MTM_ob)
+            X_test = MTM_ob.copy()
+            X_imp = clf.predict(X_test)
+            T = X_imp"
+            """
+            err = MTM / (cov_M_count/d1) - T / (cov_observe_count/d1)
+            relative_err = (torch.norm(err, 'fro') / torch.norm(MTM / (cov_M_count/d1), 'fro')).item()
+            print(relative_err)
+            err_list.append(relative_err)
+            estimation_matrix = T
+            batch_err_list.append(relative_err)
+            cost_time += time.time() - start_time
 
             # user-level recovery using least square
             print('User-level recovery...')
+            #M = torch.from_numpy(M).to(device)
+            M = M.float()
+            print(M.type())
             rmse, batch_test_num = lstsq_recovery(estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
             print('batch rmse: ', np.sqrt(rmse))
             print('batch test number: ', batch_test_num)
@@ -283,9 +306,12 @@ if __name__ == "__main__":
 
         batch_err = np.sum(batch_err_list) / all_size
         batch_rmse = np.sqrt(np.sum(batch_rmse_list) / total_test_num)
+        batch_imp_err = np.sqrt(np.sum(batch_imp_err_list) / total_test_num)
 
         err_list.append(batch_err)
         rmse_list.append(batch_rmse)
+        imp_err_list.append(batch_imp_err)
+        time_list.append(cost_time)
 
 
     err_array = np.array(err_list)
@@ -296,10 +322,21 @@ if __name__ == "__main__":
     rmse_mean = np.mean(rmse_array)
     rmse_std = np.std(rmse_array)
 
+    imp_err_array = np.array(imp_err_list)
+    imp_err_mean = np.mean(imp_err_array)
+    imp_err_std = np.std(imp_err_array)
+
+    time_array = np.array(time_list)
+    time_mean = np.mean(time_array)
+    time_std = np.std(time_array)
+
     # Define the content in the desired format
-    content = f"Dataset: {dataset}, run times: {args.runs}\n"
-    content += f"err: {err_mean:.4f}+-{err_std:.4f}\nrmse err: {rmse_mean:.4f}+-{rmse_std:.4f}\n"
+    content = f"Dataset: {dataset}, run times: {args.runs}, cost: {time_mean}+-{time_std}\n"
+    content += f"err: {err_mean:.4f}+-{err_std:.4f}\nrmse err: {rmse_mean:.4f}+-{rmse_std:.4f}\n imp err: {imp_err_mean:.4f}+-{imp_err_std:.4f}\n"
     content += '\n'
     print(content)
+    with open(f'./results/{label}.txt', 'a') as file:
+        file.write(dataset_content)
+        file.write(content)
 
     

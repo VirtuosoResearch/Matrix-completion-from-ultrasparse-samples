@@ -90,6 +90,10 @@ if __name__ == "__main__":
         div_d1 = 1
         div_d2 = 20
         p=0.8
+    elif dataset == "All_Beauty":
+        p=0.8
+        div_d1 = 10
+        div_d2 = 30
     else:
         p=0.75
         div_d1 = 1

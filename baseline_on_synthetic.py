@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from utils import *
+from src.baseline.softimpute_als import SoftImpute
 
 def lstsq_recovery(estimation_goal, M, masks, r, recovery_masks, use_reg=False, lam=0.001):
     recovery_masks = recovery_masks.bool()
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--r", type=int, default=10)
     parser.add_argument("--d1", type=int, default=10000)
-    parser.add_argument("--d2", type=int, default=1000)
+    parser.add_argument("--d2", type=int, default=250)
     parser.add_argument("--p", type=float, default=0.01)
     parser.add_argument("--ob", type=int, default=-1)
     parser.add_argument("--epsilon", type=float, default=10)
@@ -101,90 +102,83 @@ if __name__ == "__main__":
     # dataset
     dataset = args.dataset
     print(dataset)
-
-    d1 = args.d1
-    d2 = args.d2
-    M = load_data_syn(args.r, d1, d2, device)
-
-    # privacy
-    if args.delta == 0:
-        delta = 1/d1
+    if args.dataset == 'syn':
+        dataset_str = f'{args.dataset}_{args.d1}_{args.d2}'
     else:
-        delta = args.delta
-    sigma = torch.sqrt(2*torch.log(torch.tensor(1.25/delta)))/args.epsilon
+        dataset_str = f'{args.dataset}'
+    r_str = f'_r{args.r}'
+    p_str = f'_p{format(args.p, ".0e")}'
+    args.label = f"softimputeals_ob2_{args.ob}_" +  dataset_str + r_str + p_str
 
-    # main part
-    err_list = []
-    rmse_list = []    
-    for run in range(args.runs):
-        # sample observed data
-        p = args.p
-        r = args.r
-        recovery_p = 0.75
-        if args.ob > 0:
-            observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), args.ob)
-        else:
-            observed_M, masks = get_uniform_masks(M, p)
-        observed_M = torch.from_numpy(observed_M).float().to(device)
-        masks = torch.from_numpy(masks).to(device)
-        _, recovery_masks = get_uniform_masks(M, recovery_p)
-
-        # observed second-moment matrix
-        MTM = M.T @ M
-        cov_observe_M =  observed_M.T @ observed_M
-
-        # Inverse estimated probability weighting & privacy injection
-        noise_matrix = sym_noise(d2, sigma).to(device)
-        cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
-        cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
-        T_masks = 1 * (cov_observe_M!=0)   
-        cov_observe_M += noise_matrix
-        
-        T = cov_observe_M / (cov_observe_count/d1)
-
-        # impute missing values from rank-r SVD corresponding to masks
-        print('Imputing...')
-        train_losses = []
-        err_estimates = []
-        epochs = 100
-        tol = 1e-7
-        lr = 0.1
-        X = T
-        loop = tqdm(range(epochs))
-        for i in loop:
-            U, D, Vt = torch.linalg.svd(X)
-            D[r:] = 0
-            #U, D, Vt = power_svd(X, k=r)
-            X_update = U @ torch.diag(D) @ Vt
-            X = T * T_masks + X_update * (1 - T_masks)
-            err = MTM - X
-            relative_err = torch.norm(err, 'fro') / torch.norm(MTM, 'fro')
-            if len(err_estimates) > 1:
-                if err_estimates[-1] > err_estimates[-2]:
-                    break
-            if i > 10:
-                if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
-                    break
-            last_err = relative_err
-            loop.set_description(f"Error: {relative_err:.7f}")
-            err_estimates.append(relative_err.item())
-        estimation_matrix = X
-        err_list.append(err_estimates[-1])
-
-        # user-level recovery using least square
-        print('User-level recovery...')
-        lam = 0.0001
-        rmse = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
-        rmse_list.append(rmse)
-
-    # results of runs
-    err_mean = np.mean(err_list)
-    err_std = np.std(err_list)
-    rmse_mean = np.mean(rmse_list)
-    rmse_std = np.std(rmse_list)
-    # Define the content in the desired format
-    content = f"Synthetic data: d1={d1}, d2={d2}:\n\
- Estimation error: {err_mean:.4f}+-{err_std:.4f}, user-level recovery RMSE: {rmse_mean:.4f}+-{rmse_std:.4f}\n"
-    content += '\n'
-    print(content)
+    softimpute_als_err_list, softimpute_als_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     
+    #users_list = [5000, 10000, 20000, 30000, 50000, 70000]
+    #users_list = [1000, 2000]
+    users_list = [10000]
+    for d1 in users_list:
+        d2 = args.d2
+        M = load_data_syn(args.r, d1, d2, device)
+        # main part
+        err_list = []
+        rmse_list = []    
+        for run in range(args.runs):
+            # sample observed data
+            p = args.p
+            r = args.r
+            recovery_p = 0.75
+            if args.ob > 0:
+                observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), args.ob)
+            else:
+                observed_M, masks = get_uniform_masks(M, p)
+            #observed_M = torch.from_numpy(observed_M).float().to(device)
+            #masks = torch.from_numpy(masks).to(device)
+            _, recovery_masks = get_uniform_masks(M, recovery_p)
+
+            # impute missing values using SoftImpute
+            M = M.cpu().numpy()
+            missing_mask = (masks == 0).cpu().numpy()
+            missing_mask = missing_mask.astype(bool)
+            M_obs = M.copy()
+            M_obs[missing_mask] = np.nan
+            clf = SoftImpute(J=5)
+            fit = clf.fit(M_obs)
+            X_test = M_obs.copy()
+            X_imp = clf.predict(X_test)
+
+            # observed second-moment matrix
+            MTM = M.T @ M
+            T = X_imp.T @ X_imp
+            err = MTM - T
+            relative_err = np.linalg.norm(err, 'fro') / np.linalg.norm(MTM, 'fro')
+            print(relative_err)
+            err_list.append(relative_err)
+            softimpute_als_err_list[run].append(relative_err)
+            estimation_matrix = torch.from_numpy(T).to(device)
+
+            # user-level recovery using least square
+            print('User-level recovery...')
+            M = torch.from_numpy(M).to(device)
+            M = M.double()
+            print(M.type())
+            lam = 0.0001
+            rmse = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            rmse_list.append(rmse)
+            softimpute_als_rmse_list[run].append(rmse)
+
+        # results of runs
+        err_mean = np.mean(err_list)
+        err_std = np.std(err_list)
+        rmse_mean = np.mean(rmse_list)
+        rmse_std = np.std(rmse_list)
+        # Define the content in the desired format
+        content = f"Synthetic data: d1={d1}, d2={d2}:\n\
+    Estimation error: {err_mean:.4f}+-{err_std:.4f}, user-level recovery RMSE: {rmse_mean:.4f}+-{rmse_std:.4f}\n"
+        content += '\n'
+        print(content)
+    
+    results = {
+        "softimpute_als_err_list": softimpute_als_err_list,
+        "softimpute_als_rmse_list": softimpute_als_rmse_list
+    }
+    #torch.save(results, f'./results/results_data/{args.label}.pt')
+        
