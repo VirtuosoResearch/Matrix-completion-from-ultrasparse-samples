@@ -142,7 +142,7 @@ def sparse_soft_impute(T, T_masks, T_M, TM_masks, r, draw=False):
     
     return X, err_estimates
 
-def alt_min(T, T_masks, MTM, r, epochs=100, lr=1, use_power_method=False, draw=False):
+def alt_min(T, T_masks, MTM, r, epochs=10000, lr=1, use_power_method=False, draw=False):
     device = T.device
     # impute missing values from rank-r SVD corresponding to masks
     train_losses = []
@@ -153,13 +153,14 @@ def alt_min(T, T_masks, MTM, r, epochs=100, lr=1, use_power_method=False, draw=F
     #V = torch.randn(d, r, device=device, requires_grad=True)
     optimizer = optim.Adam([U, U], lr=lr)
     tol = 1e-5
+    lam = 0.01
     #T_masks = 1 * (T != 0)
     print(T_masks.sum())
     loop = tqdm(range(epochs))
     for i in loop:
         optimizer.zero_grad()
         X = U @ U.t()
-        loss = ((T-X)**2).mean()
+        loss = ((T-X)**2).mean() + lam*torch.norm(X, 'nuc')
         loss.backward()
         optimizer.step()
 
