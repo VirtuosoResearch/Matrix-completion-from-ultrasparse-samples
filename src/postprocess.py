@@ -153,7 +153,7 @@ def alt_min(T, T_masks, MTM, r, epochs=10000, lr=1, use_power_method=False, draw
     #V = torch.randn(d, r, device=device, requires_grad=True)
     optimizer = optim.Adam([U, U], lr=lr)
     tol = 1e-5
-    lam = 0.01
+    lam = 0.001
     #T_masks = 1 * (T != 0)
     print(T_masks.sum())
     loop = tqdm(range(epochs))
@@ -168,9 +168,9 @@ def alt_min(T, T_masks, MTM, r, epochs=10000, lr=1, use_power_method=False, draw
         err = MTM - X
         train_losses.append(loss.item())
         relative_err = torch.norm(err, 'fro') / torch.norm(MTM, 'fro')
-        #if i > 19:
-        #    if relative_err - last_err < tol:
-        #        break
+        if i > 19:
+            if last_err - relative_err < tol:
+                break
         last_err = relative_err
         loop.set_description(f"relative err: {relative_err:.7f}")
         err_estimates.append(relative_err.item())
