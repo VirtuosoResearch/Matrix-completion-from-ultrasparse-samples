@@ -7,12 +7,26 @@ from sklearn.preprocessing import LabelEncoder
 
 def load_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
     X = torch.normal(2, 1, size = (d1, d2)).to(device)
+    X = X/d2
 
     U, D, Vt = torch.linalg.svd(X, full_matrices=False)
     D[r:] = 0
     X = U @ torch.diag(D) @ Vt
 
     return X
+
+def load_normalized_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
+    mean = 2 / np.sqrt(d2)
+    sigma = 1 / d2
+    #X = torch.normal(2, 1, size = (d1, d2)).to(device)
+    X = torch.normal(mean, sigma, size = (d1, d2)).to(device)
+
+    U, D, Vt = torch.linalg.svd(X, full_matrices=False)
+    D[r:] = 0
+    X = U @ torch.diag(D) @ Vt
+
+    return X
+
 
 def load_data_all(dataset, s=None):
     data_path = './data/'
@@ -133,6 +147,26 @@ def get_random_samples_per_row(M, entries_per_row):
 
 	observed_M = csr_matrix((data, (row, col)), shape=M_shape)
 	return observed_M.toarray(), masked_matrix
+
+import torch
+
+def random_sample_k_per_row(M, k):
+    d1, d2 = M.shape
+
+    # For each row, generate a random permutation of column indices
+    rand_indices = torch.rand(d1, d2).argsort(dim=1)
+    
+    # Create a mask with k entries per row set to 1
+    mask = torch.zeros_like(M, dtype=torch.bool)
+    row_indices = torch.arange(d1).unsqueeze(1)
+    col_indices = rand_indices[:, :k]
+    mask[row_indices, col_indices] = 1
+
+    # Apply the mask to get the observed matrix
+    observed_M = M * mask
+
+    return observed_M, mask
+
 
 def get_uniform_masks(M, p):
     M_shape = M.shape
