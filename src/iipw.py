@@ -42,13 +42,10 @@ def rowwise_normalize(M):
     return M_out
 
 def compute_err_tensor(estimation_matrix, groundtruth_matrix, mask=None):
-    if mask is not None:
-        #return torch.norm((estimation_matrix - groundtruth_matrix)[mask], 'fro')
-        A = estimation_matrix - groundtruth_matrix
-        mask = estimation_matrix != 0
-        return torch.sqrt(torch.sum((A[mask])**2))
-    else:
-        return torch.norm(estimation_matrix - groundtruth_matrix, 'fro') 
+    A = estimation_matrix - groundtruth_matrix
+    T_mask = estimation_matrix != 0
+
+    return torch.norm(A[T_mask])
 
 
 def normalize_second_moment_groundtruth(M, d1, full=True):
