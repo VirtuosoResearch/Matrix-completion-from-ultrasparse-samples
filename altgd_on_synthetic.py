@@ -6,6 +6,7 @@ from datetime import datetime
 
 from utils import *
 from src.iipw import *
+from src.recovery import vanilla_MC
 
 def lstsq_recovery(estimation_goal, M, masks, r, recovery_masks, use_reg=False, lam=0.001):
     recovery_masks = recovery_masks.bool()
@@ -135,9 +136,11 @@ if __name__ == "__main__":
         _, recovery_masks = get_uniform_masks(M, recovery_p)
 
         # impute missing values from rank-r SVD corresponding to masks
-        iipw = IIPW(M=M, observed_M=observed_M, masks=masks, r=r)
-        estimation_matrix, err = iipw.impute(n_iter=args.n_iter)
-        err_list.append(err)
+        X = vanilla_MC(M, masks, int(d2*d2), r, draw=False)
+        estimation_matrix = (X.T @ X)/d1
+        err = torch.norm((M.T @ M)/d1 - estimation_matrix)
+        print(err)
+        err_list.append(err.item())
         
         # user-level recovery using least square
         print('User-level recovery...')
@@ -156,7 +159,7 @@ if __name__ == "__main__":
  Estimation error: {err_mean:.7f}+-{err_std:.7f}, user-level recovery RMSE: {rmse_mean:.7f}+-{rmse_std:.7f}\n"
     content += '\n'
     print(content)
-    label = f"iipw_iter{args.n_iter}_{iipw.iter_num}_synthetic_d1_{d1}_d2_{d2}_r{r}_p{p}_ob{args.ob}"
+    label = f"altgd_synthetic_d1_{d1}_d2_{d2}_r{r}_p{p}_ob{args.ob}"
     log_file = f"./logs/{label}.txt"
     with open(log_file, "a") as f:
         f.write(content)

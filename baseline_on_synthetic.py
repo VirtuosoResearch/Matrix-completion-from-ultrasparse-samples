@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 import torch
 import numpy as np
 from tqdm import tqdm
+from datetime import datetime
 
 from utils import *
 from src.baseline.softimpute_als import SoftImpute
@@ -84,8 +85,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--r", type=int, default=10)
-    parser.add_argument("--d1", type=int, default=10000)
-    parser.add_argument("--d2", type=int, default=250)
+    parser.add_argument("--d1", type=int, default=-1)
+    parser.add_argument("--d2", type=int, default=1000)
     parser.add_argument("--p", type=float, default=0.01)
     parser.add_argument("--ob", type=int, default=-1)
     parser.add_argument("--epsilon", type=float, default=10)
@@ -112,12 +113,16 @@ if __name__ == "__main__":
 
     softimpute_als_err_list, softimpute_als_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     
-    #users_list = [5000, 10000, 20000, 30000, 50000, 70000]
-    #users_list = [1000, 2000]
-    users_list = [10000]
+    if args.d1 == -1:
+        #users_list = [5000, 10000, 20000, 30000, 50000, 70000]
+        users_list = [1000, 2000, 5000, 10000, 20000, 30000]
+        #users_list = [1000, 2000]
+        #users_list = [10000]
+    else:
+        users_list = [args.d1]
     for d1 in users_list:
         d2 = args.d2
-        M = load_data_syn(args.r, d1, d2, device)
+        M = load_normalized_data_syn(args.r, d1, d2, device)
         # main part
         err_list = []
         rmse_list = []    
@@ -130,26 +135,29 @@ if __name__ == "__main__":
                 observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), args.ob)
             else:
                 observed_M, masks = get_uniform_masks(M, p)
+                observed_M = observed_M.cpu().numpy()
+                masks = masks.cpu().numpy()
             #observed_M = torch.from_numpy(observed_M).float().to(device)
             #masks = torch.from_numpy(masks).to(device)
             _, recovery_masks = get_uniform_masks(M, recovery_p)
 
             # impute missing values using SoftImpute
             M = M.cpu().numpy()
-            missing_mask = (masks == 0).cpu().numpy()
+            missing_mask = (masks == 0)
             missing_mask = missing_mask.astype(bool)
             M_obs = M.copy()
             M_obs[missing_mask] = np.nan
-            clf = SoftImpute(J=5)
+            clf = SoftImpute(J=10)
             fit = clf.fit(M_obs)
             X_test = M_obs.copy()
             X_imp = clf.predict(X_test)
 
             # observed second-moment matrix
             MTM = M.T @ M
-            T = X_imp.T @ X_imp
-            err = MTM - T
-            relative_err = np.linalg.norm(err, 'fro') / np.linalg.norm(MTM, 'fro')
+            T = (X_imp.T @ X_imp)/d1
+            err = MTM/d1 - T
+            #relative_err = np.linalg.norm(err, 'fro') / np.linalg.norm(MTM, 'fro')
+            relative_err = np.linalg.norm(err, 'fro')
             print(relative_err)
             err_list.append(relative_err)
             softimpute_als_err_list[run].append(relative_err)
@@ -171,14 +179,19 @@ if __name__ == "__main__":
         rmse_mean = np.mean(rmse_list)
         rmse_std = np.std(rmse_list)
         # Define the content in the desired format
-        content = f"Synthetic data: d1={d1}, d2={d2}:\n\
-    Estimation error: {err_mean:.4f}+-{err_std:.4f}, user-level recovery RMSE: {rmse_mean:.4f}+-{rmse_std:.4f}\n"
+        time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        content = f"Time: {time}\n p: {args.p}, ob: {args.ob}\n Synthetic data: d1={d1}, d2={d2}:\n\
+    Estimation error: {err_mean:.7f}+-{err_std:.7f}, user-level recovery RMSE: {rmse_mean:.7f}+-{rmse_std:.7f}\n"
         content += '\n'
         print(content)
+        label = f"softimputeals_synthetic_d1_{d1}_d2_{d2}_r{r}_p{p}_ob{args.ob}"
+        log_file = f"./logs/{label}.txt"
+        with open(log_file, "a") as f:
+            f.write(content)
     
     results = {
         "softimpute_als_err_list": softimpute_als_err_list,
         "softimpute_als_rmse_list": softimpute_als_rmse_list
     }
-    #torch.save(results, f'./results/results_data/{args.label}.pt')
+    torch.save(results, f'./results/results_data/{args.label}.pt')
         
