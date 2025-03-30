@@ -161,5 +161,6 @@ if __name__ == "__main__":
         f.write(f"var T diag: {T_var_diag.mean()}\n")
         f.write(f"var T off diag: {T_var_off_diag.mean()}\n")
         f.write("\n")
+        
 
 
