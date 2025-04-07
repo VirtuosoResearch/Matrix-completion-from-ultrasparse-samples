@@ -37,7 +37,8 @@ if __name__ == "__main__":
     runs = args.runs
 
     total_t = 5
-    err_list = []
+    var_err_list = []
+    mean_err_list = []
     for t in range(total_t):
 
         M = load_normalized_data_syn(r, d1, d2, device)  
@@ -71,6 +72,9 @@ if __name__ == "__main__":
             
             A =  observed_M.T @ observed_M
             A_mask = A != 0
+            diag_mask = torch.eye(A.shape[0], dtype=torch.bool).to(device)
+            off_diag_mask = ~diag_mask
+            A_mask = A_mask & off_diag_mask
             A_list.append(A[A_mask])
 
             B = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
@@ -84,6 +88,7 @@ if __name__ == "__main__":
 
         # statistics of A
         A_tensor = torch.cat(A_list, dim=0)
+        print(A_tensor.shape)
 
         # statistics of B
         B_tensor = torch.cat(B_list, dim=0)
@@ -100,6 +105,7 @@ if __name__ == "__main__":
         B_mean = B_tensor.mean()
         A_var = A_tensor.var()
         B_var = B_tensor.var()
+        AB_cov = torch.mean(A_tensor * B_tensor) - A_mean * B_mean
 
         A_mu = p**2 * MTM_tensor
         B_mu = d1 * p**2
@@ -114,12 +120,19 @@ if __name__ == "__main__":
         item2 = (A_tensor - A_mean)/B_mean
         item3 = A_mean*(B_tensor - B_mean)/B_mean**2
 
+        var_item1 = A_var / B_mean**2
+        var_item2 = A_mean**2 * B_var / B_mean**4
+        var_item3 = 2 * A_mean * AB_cov / B_mean**3
+
         approx = item1 + item2 - item3
-        approx_err = (approx.var() - T_tensor.var()).abs() / T_tensor.var()
-        err_list.append(approx_err.item())
+        approx_var = var_item1 + var_item2 - var_item3
+        approx_var_err = (approx_var.mean() - T_tensor.var()).abs() / T_tensor.var()
+        approx_mean_err = (approx.mean() - T_tensor.mean()).abs() / T_tensor.mean()
+        var_err_list.append(approx_var_err.item())
+        mean_err_list.append(approx_mean_err.item())
         print("avg Estimation of eq7: ", approx.mean())
         print("avg Var of T: ", T_tensor.mean())
-        print("error: ", (approx.var() - T_tensor.var()).abs() / T_tensor.var())
+        print("error: ", (approx_var.mean() - T_tensor.var()).abs() / T_tensor.var())
 
         log_file = f"first_order_numerical.txt"
         with open(log_file, "a") as f:
@@ -128,12 +141,16 @@ if __name__ == "__main__":
             f.write(f"avg Var of T: {T_tensor.var()}\n")
             f.write("\n")
     
-    print("avg error: ", np.mean(err_list))
-    print("std error: ", np.std(err_list))
+    print("avg var error: ", np.mean(var_err_list))
+    print("avg mean error: ", np.mean(mean_err_list))
+    
     if sample == "iid":
-        np.save(f'approximation/first_order_numerical_err_iid_{p}.npy', err_list)
+        np.save(f'approximation/first_order_numerical_iid_{p}_var.npy', var_err_list)
+        np.save(f'approximation/first_order_numerical_iid_{p}_mean.npy', mean_err_list)
     else:
-        np.save(f'approximation/first_order_numerical_err_fix_{ob}.npy', err_list)
+        np.save(f'approximation/first_order_numerical_fix_{ob}_var.npy', var_err_list)
+        np.save(f'approximation/first_order_numerical_fix_{ob}_mean.npy', mean_err_list)
+    
         
 
 
