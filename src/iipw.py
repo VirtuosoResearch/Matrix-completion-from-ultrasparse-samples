@@ -234,8 +234,9 @@ class IIPW:
             X_update = U @ torch.diag(D) @ Vt
             X = T * T_masks + X_update * (1 - T_masks)
             err = self.normalized_MTM - X
-            #relative_err = torch.norm(err, 'fro') / torch.norm(MTM, 'fro')
-            relative_err = torch.norm(err, 'fro')
+            relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
+            print(relative_err)
+            #relative_err = torch.norm(err, 'fro')
             if len(err_estimates) > 1:
                 if err_estimates[-1] > err_estimates[-2]:
                     break
@@ -248,3 +249,25 @@ class IIPW:
         estimation_matrix = X
         self.iter_num = i+1
         return estimation_matrix, last_err.item()
+    
+    def impute_grad(self, n_iter=100, lr=0.5, tol=1e-7):
+        self.iter_num = n_iter
+        T = self.T
+        T_masks = 1.0 * (self.T!=0)
+        print('Imputing...')
+        train_losses = []
+        err_estimates = []
+        tol = 1e-7
+        X = T
+        U = torch.rand(self.d2, self.r).to(T.device) * 0.1
+        loop = tqdm(range(n_iter))
+        for i in loop:
+            grad = (torch.mul(U@U.T - T, T_masks) * T_masks) @ U
+            U = U - lr * grad
+            X = U @ U.T
+            err = self.normalized_MTM - X
+            relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
+            print(relative_err)
+        estimation_matrix = X
+        self.iter_num = i+1
+        return estimation_matrix
