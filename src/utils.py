@@ -116,4 +116,6 @@ def check_rank(M, draw=False, max_k=30):
         plt.show()
 
 def relative_err(X, MTM):
-    return (torch.norm(X-MTM, 'fro') / torch.norm(MTM, 'fro')).item()
+    mask = X != 0
+    return (torch.norm((X-MTM)[mask], 'fro') / torch.norm(MTM[mask], 'fro')).item()
+    #return (torch.norm(X-MTM, 'fro') / torch.norm(MTM, 'fro')).item()

@@ -1,11 +1,6 @@
 import torch
 import numpy as np
-
-import torch
-
-import torch
-
-import torch
+from tqdm import tqdm
 
 # Row-wise normalization to M. Each row of M is normalized to have mean 2/sqrt(d2) and var 1/d2
 def rowwise_normalize(M):
@@ -131,9 +126,6 @@ def prob_T_sparse(observed_M, p):
     return T_p
 
 
-def iipw_imputation_X_(M, observed_M, mask):
-    T = iipw_T(observed_M)
-
 def compute_var(matrices):
     # Stack into a 3D tensor: shape (num_matrices, rows, cols)
     stacked = torch.stack(matrices)
@@ -163,3 +155,96 @@ def compute_var(matrices):
     #print("Variance matrix:")
     #print(var_vals)
     return var_vals
+
+def compute_mean(matrices):
+    # Stack into a 3D tensor: shape (num_matrices, rows, cols)
+    stacked = torch.stack(matrices)
+
+    # Create a mask for non-zero values
+    mask = (stacked != 0).float()
+
+    # Compute sum and count for masked elements
+    sum_vals = (stacked * mask).sum(dim=0)
+    count_vals = mask.sum(dim=0)
+    print("=========> Computing variance")
+    print(f"average count: {count_vals.mean()}")
+    print(f"minimum count: {count_vals.min()}")
+
+    # Compute mean ignoring zeros
+    mean_vals = sum_vals / count_vals.clamp(min=1)  # avoid division by zero
+
+    return mean_vals
+
+def compute_mean_and_var(matrices):
+    # Stack into a 3D tensor: shape (num_matrices, rows, cols)
+    stacked = torch.stack(matrices)
+
+    # Create a mask for non-zero values
+    mask = (stacked != 0).float()
+
+    # Compute sum and count for masked elements
+    sum_vals = (stacked * mask).sum(dim=0)
+    count_vals = mask.sum(dim=0)
+    print("=========> Computing variance")
+    print(f"average count: {count_vals.mean()}")
+    print(f"minimum count: {count_vals.min()}")
+
+    # Compute mean ignoring zeros
+    mean_vals = sum_vals / count_vals.clamp(min=1)  # avoid division by zero
+
+    # Compute squared difference from mean, mask out zeros
+    squared_diff = ((stacked - mean_vals)**2) * mask
+
+    # Compute variance ignoring zeros
+    var_vals = squared_diff.sum(dim=0) / count_vals.clamp(min=1)
+
+    # Optional: Set variance to 0 where count is 0 (no non-zero entries)
+    var_vals[count_vals == 0] = 0.0
+
+    #print("Variance matrix:")
+    #print(var_vals)
+    return mean_vals[0], var_vals[0]
+
+class IIPW:
+    def __init__(self, M, observed_M, masks, r):
+        self.d1, self.d2 = M.shape
+        self.M = M
+        self.observed_M = observed_M
+        self.masks = masks
+        self.r = r
+        self.T = iipw_T(observed_M)
+        self.normalized_MTM = M.T @ M / self.d1
+        self.iter_num = 0
+    
+    def impute(self, n_iter=100, tol=1e-7):
+        self.iter_num = n_iter
+        T = self.T
+        T_masks = 1.0 * (self.T!=0)
+        print('Imputing...')
+        train_losses = []
+        err_estimates = []
+        tol = 1e-7
+        lr = 0.1
+        X = T
+        loop = tqdm(range(n_iter))
+        for i in loop:
+            U, D, Vt = torch.linalg.svd(X)
+            D[self.r:] = 0
+            #U, D, Vt = power_svd(X, k=r)
+            X_update = U @ torch.diag(D) @ Vt
+            X = T * T_masks + X_update * (1 - T_masks)
+            err = self.normalized_MTM - X
+            #relative_err = torch.norm(err, 'fro') / torch.norm(MTM, 'fro')
+            relative_err = torch.norm(err, 'fro')
+            if len(err_estimates) > 1:
+                if err_estimates[-1] > err_estimates[-2]:
+                    break
+            if i > 10:
+                if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
+                    break
+            last_err = relative_err
+            loop.set_description(f"Error: {relative_err:.7f}")
+            err_estimates.append(relative_err.item())
+        estimation_matrix = X
+        self.iter_num = i+1
+        return estimation_matrix, last_err.item()

@@ -249,6 +249,14 @@ def load_data_all(dataset, s=None):
             sparse_matrix = torch.load(file_path, weights_only=False)
             sparse_matrix = sparse_matrix.astype(float)
         return sparse_matrix
+    
+    else:
+        file_path = data_path+f'amazon/{dataset}/rating_matrix_sparse.pt'
+        print(file_path)
+        if os.path.exists(file_path):
+            sparse_matrix = torch.load(file_path, weights_only=False)
+            sparse_matrix = sparse_matrix.astype(float)
+        return sparse_matrix
 
 def load_data_syn(r=5, d1=5000, d2=2000, device='cpu'):
     X = torch.normal(2, 1, size = (d1, d2)).to(device)

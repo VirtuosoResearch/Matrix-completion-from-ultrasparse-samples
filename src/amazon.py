@@ -21,8 +21,8 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="syn")
     parser.add_argument("--sample", type=str, default="uniform")
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--runs", type=int, default=3)
-    parser.add_argument("--r", type=int, default=10)
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--r", type=int, default=2)
     parser.add_argument("--d1", type=int, default=1000)
     parser.add_argument("--d2", type=int, default=100)
     parser.add_argument("--p", type=float, default=0.8)
@@ -92,17 +92,18 @@ if __name__ == "__main__":
         p=0.8
     elif dataset == "All_Beauty":
         p=0.8
-        div_d1 = 10
-        div_d2 = 30
+        div_d1 = 1
+        div_d2 = 300
     else:
-        p=0.75
+        p=0.8
         div_d1 = 1
         div_d2 = 1
     if args.mark == 'mc':
         #p = 0.6
         div_d1 *= 4
         div_d2 *= 1
-    M_dataset = MatrixDataset(M_all, int(d1_all/div_d1)+1, int(d2_all/div_d2)+1)
+    #M_dataset = MatrixDataset(M_all, int(d1_all/div_d1)+1, int(d2_all/div_d2)+1)
+    M_dataset = MatrixDataset(M_all, 100000, 4000)
     matrix_dataloader = DataLoader(
         M_dataset,
         batch_size=1,         # You can adjust the batch size as needed
@@ -217,7 +218,6 @@ if __name__ == "__main__":
                 #print(noise_matrix)
                 T_masks = 1*(cov_observe_M!=0)
                 TM_masks = 1*(MTM!=0)
-                cov_observe_M += noise_matrix
                 T = cov_observe_M / (cov_observe_count/(d1))
                 T_M = MTM / (cov_M_count/(d1))
 
@@ -236,6 +236,7 @@ if __name__ == "__main__":
                 elif args.mark == 'ours':
                     #T_M = T_M.to_dense()
                     X_T, err_estimates = soft_impute(T, T_masks, T_M, r, use_power_method=False, draw=True)
+                    #X_T = T
                     #X_T, err_estimates = sparse_soft_impute(T, T_masks, T_M, TM_masks, r, draw=True)
                 elif args.mark == 'MTMMC':
                     num_entries = TM_masks.sum()
@@ -253,18 +254,18 @@ if __name__ == "__main__":
 
                 end_time = time.time()
 
-                rmse_err, batch_test_num = lstsq_recovery(estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001, batch=True)
+                rmse_err, batch_test_num = lstsq_recovery(estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.01, batch=True)
                 print('batch rmse: ', rmse_err)
                 print('batch test number: ', batch_test_num)
                 batch_rmse_list.append(rmse_err*batch_test_num)
+                print(rmse_err*batch_test_num)
                 total_test_num += batch_test_num
-                total_test_num +=0
                 cost_time += end_time - start_time
-            
+            break
                 
 
 
-            
+        print(batch_rmse_list, total_test_num)
 
         batch_err = np.sum(batch_err_list) / all_size
         batch_rmse = np.sqrt(np.sum(batch_rmse_list) / total_test_num)
@@ -300,7 +301,7 @@ if __name__ == "__main__":
         'rmse_mean': rmse_mean,
         'rmse_std': rmse_std
     }
-    torch.save(results, f'../results/results_data/{args.label}.pt')
+    torch.save(results, f'../results/results_data/amazon/{args.label}.pt')
 
     # Define the content in the desired format
     content = f"run times: {args.runs}, cost: {time_mean}+-{time_std}\n"
@@ -308,7 +309,7 @@ if __name__ == "__main__":
     content += '\n'
     print(content)
     # Write the content to a file
-    with open(f'../results/{args.label}.txt', 'a') as file:
+    with open(f'../results/amazon/{args.label}.txt', 'a') as file:
         file.write(time_content)
         file.write(dataset_content)
         file.write(privacy_content)

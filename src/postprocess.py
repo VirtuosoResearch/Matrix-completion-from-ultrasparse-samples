@@ -1,12 +1,12 @@
 import torch
 import numpy as np
+import torch.optim as optim
+from tqdm import tqdm
 
 from utils import *
 from data import *
-from data_utils import *
 from power_method_svd import power_svd
-from sparse_utils import *
-from recovery import lstsq_recovery
+
 
 def soft_impute(T, T_masks, MTM, r, use_power_method=False, draw=False):
     device = T.device
@@ -42,8 +42,9 @@ def soft_impute(T, T_masks, MTM, r, use_power_method=False, draw=False):
         """
         X_update = U @ torch.diag(D) @ Vt
         #X = X * (1-lr) + X_update * lr
-        X = T * T_masks + X_update * (1 - T_masks)
+        #X = T * T_masks + X_update * (1 - T_masks)
         #X = T * (~missing_mask_MTM) + X_update * missing_mask_MTM
+        X = X_update
         err = MTM - X
         #loss = (err**2).mean()
         #train_losses.append(loss.item())
@@ -106,8 +107,8 @@ def sparse_soft_impute(T, T_masks, T_M, TM_masks, r, draw=False):
         X_update = U @ D @ Vt
         #print(X_update)
         #X = X * (1-lr) + X_update * lr
-        #X = T * T_masks + X_update * (1 - T_masks)
-        X = T + X_update 
+        X = T * T_masks + X_update * (1 - T_masks)
+        #X = T + X_update 
         #print(X)
         #X = T * (~missing_mask_MTM) + X_update * missing_mask_MTM
         err = T_M - X
@@ -160,7 +161,7 @@ def alt_min(T, T_masks, MTM, r, epochs=10000, lr=1, use_power_method=False, draw
     for i in loop:
         optimizer.zero_grad()
         X = U @ U.t()
-        loss = ((T-X)**2).mean() + lam*torch.norm(X, 'nuc')
+        loss = (((T-X)*T_masks)**2).mean() + lam*torch.norm(X, 'nuc')
         loss.backward()
         optimizer.step()
 
@@ -196,46 +197,43 @@ def alt_min(T, T_masks, MTM, r, epochs=10000, lr=1, use_power_method=False, draw
 
     return X, err_estimates
 
-def nuclear_reg(T, T_masks, MTM, r, epochs=100, lr=1, use_power_method=False, draw=False):
-    d1, d2 = T.shape
+def nuclear_reg(T, MTM, r, lam=0.01, epochs=100, lr=1, use_power_method=False, draw=False):
     device = T.device
     # impute missing values from rank-r SVD corresponding to masks
     train_losses = []
     err_estimates = []
-    epochs = 100
-    lr = 1
-    alpha = 0.01
     d = T.shape[0]
-    #ETE = T_masks.T.float() @ T_masks.float()
 
-    X = torch.rand(d2, d2, requires_grad=True, device=device)
-    #X = T_emp
-    X.requires_grad = True
-    optimizer = optim.Adam([X], lr=lr)
+    U = torch.randn(d, r, device=device, requires_grad=True)
+    #V = torch.randn(d, r, device=device, requires_grad=True)
+    #X = torch.randn(d, d, device=device, requires_grad=True)
+    optimizer = optim.Adam([U, U], lr=lr)
+    #optimizer = optim.Adam([X], lr=lr)
     tol = 1e-5
-    #T_masks = 1 * (T != 0)
-    print(T_masks.sum())
+    T_masks = 1 * (T != 0)
     loop = tqdm(range(epochs))
     for i in loop:
         optimizer.zero_grad()
-        with torch.no_grad():
-            U, D, Vt = torch.linalg.svd(X.detach(), full_matrices=False)
-        loss = torch.trace(X.T @ T)
+        X = U @ U.t()
+        if lam > 0:
+            loss = (((T-X)*T_masks)**2).mean() + lam*torch.norm(X, 'nuc')
+            #loss = ((T-X)**2).mean()
+        else:
+            loss = ((T-X)**2).mean()
         loss.backward()
-        X.grad = X.grad - alpha * U @ Vt
+        #X.grad = X.grad - lam * U @ U.T
         optimizer.step()
-        X.grad.zero_()
 
         #X = X * T_masks + X_update * (1 - T_masks)
-        #err = MTM - X
+        err = MTM - X
         train_losses.append(loss.item())
-        #relative_err = torch.norm(err, 'fro') / torch.norm(MTM, 'fro')
-        #if i > 19:
-        #    if relative_err - last_err < tol:
-        #        break
-        #last_err = relative_err
-        #loop.set_description(f"relative err: {relative_err:.7f}")
-        #err_estimates.append(relative_err.item())
+        relative_err = torch.norm(err, 'fro')
+        if i > 19:
+            if last_err - relative_err < tol:
+                break
+        last_err = relative_err
+        loop.set_description(f"relative err: {relative_err:.7f}")
+        err_estimates.append(relative_err.item())
         #print(relative_err)
 
     if draw:
@@ -256,7 +254,7 @@ def nuclear_reg(T, T_masks, MTM, r, epochs=100, lr=1, use_power_method=False, dr
         plt.legend()
         plt.savefig('../results/tmp/err.png')
 
-    return X, err_estimates
+    return X
 
 def direct_svd(T, T_masks, MTM, r, use_power_method=False, draw=False):
     if not use_power_method:
@@ -270,3 +268,55 @@ def direct_svd(T, T_masks, MTM, r, use_power_method=False, draw=False):
     relative_err = torch.norm(X-MTM, 'fro') / torch.norm(MTM, 'fro')
 
     return X, relative_err
+
+def generate_gaussian_factors(n, d, k):
+    U = torch.from_numpy(np.random.normal(size = (n, k)))
+    V = torch.from_numpy(np.random.normal(size = (d, k)))
+    U = U / k**(1/4)
+    V = V / k**(1/4) # u^Tv scales as k**(1/2)
+    return U, V
+
+def compute_regularizer(U, cutoff = 0):
+    _, k = U.shape
+    row_norms = torch.norm(U, dim=-1)
+    return torch.mean(torch.maximum(torch.zeros_like(row_norms), row_norms / k**(1/4) - cutoff)**2)
+
+def nuclear_reg_2(T, MTM, r, lr = 1e-3, iters = 10000, reg_lambda = 10, cutoff = 0.5, X_gt = None, symm = False, weighted = False, verbose = True, return_UV = False):
+    device = T.device
+    X = T
+    d = T.shape[0]
+    mask = T != 0
+    U, V = generate_gaussian_factors(d, d, r)
+    U = U.to(device)
+    V = V.to(device)
+    magnitude = (torch.sum(X[mask]**2) / torch.sum(mask))**(1/2)
+    magnitude = magnitude.to(device)
+    print("Magnitude: {}".format(magnitude)) # do row-by-row instead?
+    U, V = U * magnitude**(1/2), V * magnitude**(1/2)
+    if symm:
+        V = U
+    U.requires_grad = True
+    V.requires_grad = True
+    trainer = torch.optim.Adam([U, V], lr = lr)
+    train_losses = []
+    err_estimates = []
+    tol = 1e-7
+    loop = tqdm(range(iters))
+    for i in loop:
+        trainer.zero_grad()
+        X_est = U @ V.mT
+        loss = (((T-X)[mask])**2).mean()
+        reg = compute_regularizer(U, cutoff) + compute_regularizer(V, cutoff)
+        (loss + reg_lambda * reg).backward()
+        trainer.step()
+        err = MTM - X_est
+        train_losses.append(loss.item())
+        relative_err = torch.norm(err, 'fro')
+        if i > 19:
+            if last_err - relative_err < tol:
+                break
+        last_err = relative_err
+        loop.set_description(f"relative err: {relative_err:.7f}")
+    X_est = X_est.detach()
+    
+    return X_est

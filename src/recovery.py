@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
-from sparse_utils import sparse_svds_for_tensor
+#from sparse_utils import sparse_svds_for_tensor
 from power_method_svd import power_svd
 from utils import top_r_svd
 import matplotlib.pyplot as plt
@@ -65,6 +65,7 @@ def lstsq_recovery(estimation_goal, M, masks, r, recovery_masks, use_reg=False, 
         
         test_num += num_test
         total_num += num_test + num_train
+        #print(num_test)
 
         #train_idx = torch.nonzero(torch.tensor(train_idx)).squeeze()
         #test_idx = torch.nonzero(torch.tensor(test_idx)).squeeze()
@@ -176,9 +177,13 @@ def vanilla_MC(M, masks, num_entries, r, epochs=200, lr=0.1, draw=False):
     train_losses = []
     d1, d2 = M.shape
 
-    U = torch.randn(d1, r, device=device, requires_grad=True)
-    V = torch.randn(d2, r, device=device, requires_grad=True)
-    optimizer = optim.Adam([U, U], lr=lr)
+    U = torch.randn(d1, r, device=device, requires_grad=False)
+    V = torch.randn(d2, r, device=device, requires_grad=False)
+    magnitude = (torch.sum(M[masks.bool()]**2) / torch.sum(masks.bool()))**(1/2)
+    U, V = U * magnitude**(1/2), V * magnitude**(1/2)
+    U.requires_grad = True
+    V.requires_grad = True
+    optimizer = optim.Adam([U, V], lr=lr)
     tol = 1e-9
     #lam = 0.00001
     lam = 0
@@ -187,7 +192,7 @@ def vanilla_MC(M, masks, num_entries, r, epochs=200, lr=0.1, draw=False):
     loop = tqdm(range(epochs))
     for i in loop:
         optimizer.zero_grad()
-        X = U @ U.T
+        X = U @ V.T
         if masks is not None:
             loss = torch.norm((X-M)*masks, 'fro')/num_entries + lam*(torch.norm(U, p=2)**2/d1 + torch.norm(V, p=2)**2/d2)
         else:

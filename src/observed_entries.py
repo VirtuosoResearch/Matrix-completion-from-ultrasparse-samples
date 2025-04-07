@@ -41,7 +41,7 @@ if __name__ == "__main__":
     r_str = f'_r{args.r}'
     p_str = f'_p{format(args.p, ".0e")}'
 
-    args.label = "observed_entries_2_" + dataset_str + r_str + p_str
+    args.label = "new_observed_entries_iid_" + dataset_str + r_str + p_str
 
     if torch.cuda.is_available():
         free_gpu = get_free_gpu()
@@ -72,7 +72,8 @@ if __name__ == "__main__":
 
     #sample_perrow_list = [2,4,8,10,20,50]
     #sample_perrow_list = [2]
-    sample_ratio_list = [0.002, 0.004, 0.006, 0.008, 0.01]
+    #sample_ratio_list = [0.002, 0.004, 0.006, 0.008, 0.01]
+    sample_ratio_list = [0.02]
     #sample_ratio_list = [0.06, 0.1]
     original_err_list, original_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
     T_prob_err_list, T_prob_rmse_list = [[] for i in range(args.runs)], [[] for i in range(args.runs)]
@@ -109,7 +110,7 @@ if __name__ == "__main__":
             cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
             cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
             T_masks = 1 * (cov_observe_M!=0)   
-            cov_observe_M += noise_matrix
+            #cov_observe_M += noise_matrix
             
             T = cov_observe_M / (cov_observe_count/d1)
             print("test", ((T!=0)^(cov_observe_M!=0)).sum()) 
@@ -147,8 +148,9 @@ if __name__ == "__main__":
 
             estimation_matrix = X_T
             lam = 0.0001
-            #T_rmse_err = lstsq_recovery(estimation_goal=T, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
-            #ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            T_rmse_err = lstsq_recovery(estimation_goal=T, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            #T_freq_rmse_err = lstsq_recovery(estimation_goal=T, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
+            ob2_rmse_err = lstsq_recovery(estimation_goal=X_2, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
             rmse_err = lstsq_recovery(estimation_goal=estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
             SVD_MTM_rmse_err = lstsq_recovery(estimation_goal=SVD_MTM, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=lam)
 
@@ -158,14 +160,15 @@ if __name__ == "__main__":
 
             original_err_list[run].append(original_err)
             T_prob_err_list[run].append(T_prob_err)
+            #T_prob_rmse_list[run].append(T_prob_rmse_err)
             T_freq_err_list[run].append(T_freq_err)
-            #T_freq_rmse_list[run].append(T_rmse_err)
+            T_freq_rmse_list[run].append(T_rmse_err)
             SVD_T_err_list[run].append(direct_SVD_err)
             SVD_MTM_err_list[run].append(SVD_MTM_err)
             SVD_MTM_rmse_list[run].append(SVD_MTM_rmse_err)
             #SVD_T_rmse_list[run].append(SVD_T_rmse_err)
             ob2_err_list[run].append(ob2_err)
-            #ob2_rmse_list[run].append(ob2_rmse_err)
+            ob2_rmse_list[run].append(ob2_rmse_err)
             #X_original_err_list[run].append(X_original_err)
             err_list[run].append(X_T_freq_err)
             rmse_list[run].append(rmse_err)
@@ -193,6 +196,11 @@ if __name__ == "__main__":
     SVD_MTM_rmse_array = np.array(SVD_MTM_rmse_list)
     SVD_MTM_rmse_mean = np.mean(SVD_MTM_rmse_array, axis=0)
     SVD_MTM_rmse_std = np.std(SVD_MTM_rmse_array, axis=0)
+
+    T_prob_rmse_array = np.array(T_prob_rmse_list)
+    T_prob_rmse_mean = np.mean(T_prob_rmse_array, axis=0)
+    T_prob_rmse_std = np.std(T_prob_rmse_array, axis=0)
+
 
     T_freq_rmse_array = np.array(T_freq_rmse_list)
     T_freq_rmse_mean = np.mean(T_freq_rmse_array, axis=0)
@@ -232,6 +240,8 @@ if __name__ == "__main__":
         'original_err_std': original_err_std,
         'T_prob_err_mean': T_prob_err_mean,
         'T_prob_err_std': T_prob_err_std,
+        'T_prob_rmse_mean': T_prob_rmse_mean,
+        'T_prob_rmse_std': T_prob_rmse_std,
         'T_freq_err_mean': T_freq_err_mean,
         'T_freq_err_std': T_freq_err_std,
         'T_freq_rmse_mean': T_freq_rmse_mean,
