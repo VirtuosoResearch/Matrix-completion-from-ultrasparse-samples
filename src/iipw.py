@@ -206,15 +206,23 @@ def compute_mean_and_var(matrices):
     return mean_vals[0], var_vals[0]
 
 class IIPW:
-    def __init__(self, M, observed_M, masks, r):
+    def __init__(self, M, observed_M, masks, r, missing_input=False):
         self.d1, self.d2 = M.shape
         self.M = M
         self.observed_M = observed_M
         self.masks = masks
         self.r = r
         self.T = iipw_T(observed_M)
-        self.normalized_MTM = M.T @ M / self.d1
+        if missing_input:
+            self.normalized_MTM = iipw_T(M)
+        else:
+            self.normalized_MTM = M.T @ M / self.d1
         self.iter_num = 0
+    
+    def r(t, alpha):
+        mask = (t >= alpha).float()  # 𝟙_{t ≥ alpha}
+        output = ((t - alpha) ** 4) * mask
+        return output
     
     def impute(self, n_iter=100, tol=1e-7):
         self.iter_num = n_iter
@@ -235,7 +243,7 @@ class IIPW:
             X = T * T_masks + X_update * (1 - T_masks)
             err = self.normalized_MTM - X
             relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
-            print(relative_err)
+            #print(relative_err)
             #relative_err = torch.norm(err, 'fro')
             if len(err_estimates) > 1:
                 if err_estimates[-1] > err_estimates[-2]:
@@ -250,6 +258,96 @@ class IIPW:
         self.iter_num = i+1
         return estimation_matrix, last_err.item()
     
+    def impute_grad_reg(self, n_iter=100, lr=0.5, tol=1e-7, alpha=None, lam=1):
+        def compute_mu(Z):
+            d = Z.shape[0]
+            frob_norm = torch.norm(Z)  # ||Z||_F
+            row_norms = torch.norm(Z, dim=1)    # ||Z_i|| for each row
+            mu_vals = (row_norms / frob_norm) * (d ** 0.5)
+            mu = torch.max(mu_vals)
+            return mu.item()
+        def R(X, alpha):
+            norms = torch.norm(X, dim=1)  # (d,)
+            mask = (norms >= alpha).float()
+            r_vals = ((norms - alpha)**4) * mask
+            return r_vals.sum()
+        def grad_R(X, alpha):
+            norms = torch.norm(X, dim=1, keepdim=True)  # shape: (d, 1)
+            mask = (norms >= alpha).float()
+            coeffs = 4 * ((norms - alpha) ** 3) * mask  # shape: (d, 1)
+            grad = coeffs * X / norms.clamp(min=1e-8)   # avoid divide-by-zero
+            return grad
+        self.iter_num = n_iter
+        T = self.T
+        T_masks = 1.0 * (self.T!=0)
+        if alpha is None:
+            mu = compute_mu(T)
+            alpha = 10 * mu / np.sqrt(self.d2)
+        print('Imputing...')
+        train_losses = []
+        err_estimates = []
+        tol = 1e-7
+        X = T
+        m = T_masks.sum().item()
+        U = torch.rand(self.d2, self.r).to(T.device) * 0.1
+        U.require_grad = True
+
+        loop = tqdm(range(n_iter))
+        for i in loop:
+            residual = (U @ U.T - T) * T_masks
+            grad = (2/m) * (residual @ U)
+            reg_mask = (torch.norm(U,dim=1) > alpha)
+            reg = (((torch.norm(U,dim=1)-alpha)**4)[reg_mask]).sum()
+            reg_grad = grad_R(U, alpha)
+            U = U - lr * (grad + lam*reg_grad)
+
+            X = U @ U.T
+            err = self.normalized_MTM - X
+            relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
+            err_estimates.append(relative_err.item())
+            if len(err_estimates) > 1:
+                if err_estimates[-1] > err_estimates[-2]:
+                    break
+            if i > 10:
+                if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
+                    break
+            #print(relative_err)
+            loop.set_description(f"Error: {relative_err:.7f}, reg: {reg.item()}, grad: {grad.sum().item()}, reg_grad: {reg_grad.sum().item()}")
+        estimation_matrix = T * T_masks + X * (1 - T_masks)
+        self.iter_num = i+1
+        return estimation_matrix, relative_err.item()
+    
+    def impute_grad_old(self, n_iter=100, lr=0.5, tol=1e-7):
+        self.iter_num = n_iter
+        T = self.T
+        T_masks = 1.0 * (self.T!=0)
+        print('Imputing...')
+        train_losses = []
+        err_estimates = []
+        tol = 1e-7
+        X = T
+        m = T_masks.sum().item()
+        U = torch.rand(self.d2, self.r).to(T.device) * 0.1
+        loop = tqdm(range(n_iter))
+        for i in loop:
+            grad = (torch.mul(U@U.T - T, T_masks) * T_masks) @ U
+            U = U - lr * grad
+            X = U @ U.T
+            err = self.normalized_MTM - X
+            relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
+            err_estimates.append(relative_err.item())
+            if len(err_estimates) > 1:
+                if err_estimates[-1] > err_estimates[-2]:
+                    break
+            if i > 10:
+                if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
+                    break
+            #print(relative_err)
+            loop.set_description(f"Error: {relative_err:.7f}")
+        estimation_matrix = X
+        self.iter_num = i+1
+        return estimation_matrix, relative_err.item()
+
     def impute_grad(self, n_iter=100, lr=0.5, tol=1e-7):
         self.iter_num = n_iter
         T = self.T
@@ -259,15 +357,67 @@ class IIPW:
         err_estimates = []
         tol = 1e-7
         X = T
+        m = T_masks.sum().item()
         U = torch.rand(self.d2, self.r).to(T.device) * 0.1
         loop = tqdm(range(n_iter))
         for i in loop:
-            grad = (torch.mul(U@U.T - T, T_masks) * T_masks) @ U
+            #grad = (torch.mul(U@U.T - T, T_masks) * T_masks) @ U
+            residual = (U @ U.T - T) * T_masks
+            grad = (2 / m) * (residual @ U)
             U = U - lr * grad
             X = U @ U.T
             err = self.normalized_MTM - X
             relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
-            print(relative_err)
+            err_estimates.append(relative_err.item())
+            if len(err_estimates) > 1:
+                if err_estimates[-1] > err_estimates[-2]:
+                    break
+            if i > 10:
+                if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
+                    break
+            #print(relative_err)
+            loop.set_description(f"Error: {relative_err:.7f}")
         estimation_matrix = X
         self.iter_num = i+1
-        return estimation_matrix
+        return estimation_matrix, relative_err.item()
+    
+    def impute_grad_loop(self, n_iter=100, lr=0.5, tol=1e-7):
+        self.iter_num = n_iter
+        T = self.T
+        T_masks = 1.0 * (self.T!=0)
+        print('Imputing...')
+        train_losses = []
+        err_estimates = []
+        tol = 1e-7
+        X = T
+        m = T_masks.sum().item()
+        U = torch.rand(self.d2, self.r).to(T.device) * 0.1
+        loop = tqdm(range(n_iter))
+        
+        for _ in loop:
+            grad = torch.zeros_like(U)
+            for i in range(self.d2):
+                grad_i = torch.zeros(self.r, device=U.device, dtype=U.dtype)
+                for j in range(self.d2):
+                    if T_masks[i, j]:
+                        error_ij = torch.dot(U[i], U[j]) - T[i, j]
+                        grad_i += error_ij * U[j]
+                grad[i] = (2 / m) * grad_i
+            #grad = (torch.mul(U@U.T - T, T_masks) * T_masks) @ U
+            #grad = 2*((U@U.T * T_masks) @ U) / T_masks.sum()
+            U = U - lr * grad
+            X = U @ U.T
+            err = self.normalized_MTM - X
+            relative_err = torch.norm(err, 'fro') / torch.norm(self.normalized_MTM, 'fro')
+            err_estimates.append(relative_err.item())
+            if len(err_estimates) > 1:
+                if err_estimates[-1] > err_estimates[-2]:
+                    break
+            if _ > 10:
+                if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
+                    break
+            #print(relative_err)
+            loop.set_description(f"Error: {relative_err:.7f}")
+        estimation_matrix = X
+        self.iter_num = i+1
+        return estimation_matrix, relative_err.item()

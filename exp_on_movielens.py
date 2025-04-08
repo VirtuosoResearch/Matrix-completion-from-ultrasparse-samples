@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from utils import *
 from power_method_svd import power_svd
+from src.iipw import IIPW
 
 def sparse_collate_fn(batch):
     return batch
@@ -197,6 +198,7 @@ if __name__ == "__main__":
         collate_fn=sparse_collate_fn  # Pass the custom collate function
     )
     dataset_content = f'sparse d1 = {d1_all}, d2 = {d2_all}, entries = {M_all.nnz}, p = {args.p}\n'
+    label = "iipw_grad_sparse_dataset" + dataset
 
     # privacy
     epsilon = args.epsilon
@@ -206,8 +208,11 @@ if __name__ == "__main__":
     # main part
     for run in range(args.runs):
         torch.manual_seed(run)
+        total_err = 0
+        total_second_observed = 0
         batch_err_list = []
         batch_rmse_list = []
+        time_list = []
         cost_time = 0
         
         r = args.r
@@ -219,60 +224,34 @@ if __name__ == "__main__":
             print(M.shape)
             batch_size = d1*d2
             observed_M, masks = get_sparse_masks(M, p)
+            #recovery_p = 0.8
             #_, recovery_masks = get_sparse_masks(M, recovery_p)
+            #recovery_masks = recovery_masks.to_dense().bool().to(device)
             recovery_masks = masks.to_dense().bool().to(device)
             M = M.to_dense()
             M = M.to(device)
 
             print("Sparse ratio: ", num_entries/batch_size)
+            start_time = time.time()
 
             observed_M = observed_M.to_dense().to(device)
             masks = masks.to_dense().to(device)
             
-            # observed second-moment matrix
-            cov_observe_M =  observed_M.T @ observed_M
-            MTM = M.T @ M
-            #print(cov_observe_M)
+            epochs = 5000
+            tol = 1e-10
+            lr = 1
+            iipw = IIPW(M=M, observed_M=observed_M, masks=masks, r=r, missing_input=True)
+            estimation_matrix, _ = iipw.impute_grad_reg(n_iter=epochs, tol=tol, lr=lr, lam=0.000001)
+            S = iipw.normalized_MTM
+            S_masks = S != 0
+            total_second_observed += torch.sum(S_masks).item()
+            err = S - estimation_matrix
+            relative_err = torch.norm(err, 'fro')
 
-            # Inverse estimated probability weighting & privacy injection
-            cov_M_count = (1 * (M != 0)).float().T @ (1 * (M != 0).float())
-            cov_M_count = cov_M_count + (cov_M_count == 0) * 1
-            cov_observe_count = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
-            cov_observe_count = cov_observe_count + (cov_observe_count == 0) * 1
-            noise_matrix = sym_noise(d2, sigma).to(device)
-            T_masks = 1*(cov_observe_M!=0)
-            S_masks = 1*(MTM!=0)
-            #cov_observe_M += noise_matrix
-            T = cov_observe_M / (cov_observe_count/(d1))
-            S = MTM / (cov_M_count/(d1))
-
-            # impute missing values from rank-r SVD corresponding to masks
-            print('Imputing...')
-            train_losses = []
-            err_estimates = []
-            epochs = 100
-            tol = 1e-7
-            lr = 0.1
-            X = T
-            loop = tqdm(range(epochs))
-            for i in loop:
-                U, D, Vt = power_svd(X, k=r)
-                X_update = U @ torch.diag(D) @ Vt
-                X = T * T_masks + X_update * (1 - T_masks)
-                err = S - X
-                relative_err = torch.norm(err, 'fro') / torch.norm(S, 'fro')
-                if len(err_estimates) > 1:
-                    if err_estimates[-1] > err_estimates[-2]:
-                        break
-                if i > 10:
-                    if (abs(err_estimates[-1] - err_estimates[-2]) < tol) or (relative_err > err_estimates[0]):
-                        break
-                last_err = relative_err
-                loop.set_description(f"Error: {relative_err:.7f}")
-                err_estimates.append(relative_err.item())
-            estimation_matrix = X
-            batch_err_list.append(err_estimates[-1]*batch_size)
-
+            total_err += relative_err
+            print("Relative error: ", relative_err / S_masks.sum())
+            cost_time += time.time() - start_time
+            #print(aaa)
             # user-level recovery using least square
             print('User-level recovery...')
             rmse, batch_test_num = lstsq_recovery(estimation_matrix, M=M, masks=masks, r=r, recovery_masks=recovery_masks, use_reg=True, lam=0.001)
@@ -280,12 +259,15 @@ if __name__ == "__main__":
             print('batch test number: ', batch_test_num)
             batch_rmse_list.append(rmse*batch_test_num)
             total_test_num += batch_test_num
+            
 
-        batch_err = np.sum(batch_err_list) / all_size
+        #batch_err = np.sum(batch_err_list) / all_size
+        batch_err = total_err.item() / total_second_observed
         batch_rmse = np.sqrt(np.sum(batch_rmse_list) / total_test_num)
 
         err_list.append(batch_err)
         rmse_list.append(batch_rmse)
+        time_list.append(cost_time)
 
 
     err_array = np.array(err_list)
@@ -296,10 +278,17 @@ if __name__ == "__main__":
     rmse_mean = np.mean(rmse_array)
     rmse_std = np.std(rmse_array)
 
+    time_array = np.array(time_list)
+    time_mean = np.mean(time_array)
+    time_std = np.std(time_array)
+
     # Define the content in the desired format
-    content = f"Dataset: {dataset}, run times: {args.runs}\n"
+    content = f"Dataset: {dataset}, run times: {args.runs}, cost: {time_mean}+-{time_std}\n"
     content += f"err: {err_mean:.4f}+-{err_std:.4f}\nrmse err: {rmse_mean:.4f}+-{rmse_std:.4f}\n"
     content += '\n'
     print(content)
+    with open(f'./results/{label}.txt', 'a') as file:
+        file.write(dataset_content)
+        file.write(content)
 
     

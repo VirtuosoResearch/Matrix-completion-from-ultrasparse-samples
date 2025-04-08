@@ -209,6 +209,8 @@ if __name__ == "__main__":
     # main part
     for run in range(args.runs):
         torch.manual_seed(run)
+        total_err = 0
+        total_second_observed = 0
         batch_err_list = []
         batch_rmse_list = []
         batch_imp_err_list = []
@@ -285,8 +287,11 @@ if __name__ == "__main__":
             X_imp = clf.predict(X_test)
             T = X_imp"
             """
-            err = MTM / (cov_M_count/d1) - T / (cov_observe_count/d1)
-            relative_err = (torch.norm(err, 'fro') / torch.norm(MTM / (cov_M_count/d1), 'fro')).item()
+            S_masks = 1*(MTM!=0)
+            #err = MTM / (cov_M_count) - T / (cov_observe_count)
+            err = MTM/ (cov_M_count) - T
+            relative_err = (torch.norm(err, 'fro') / S_masks.sum()).item()
+            total_err += err
             print(relative_err)
             err_list.append(relative_err)
             estimation_matrix = T
@@ -304,7 +309,8 @@ if __name__ == "__main__":
             batch_rmse_list.append(rmse*batch_test_num)
             total_test_num += batch_test_num
 
-        batch_err = np.sum(batch_err_list) / all_size
+        #batch_err = np.sum(batch_err_list) / all_size
+        batch_err = total_err.item() / total_second_observed
         batch_rmse = np.sqrt(np.sum(batch_rmse_list) / total_test_num)
         batch_imp_err = np.sqrt(np.sum(batch_imp_err_list) / total_test_num)
 
