@@ -36,7 +36,7 @@ if __name__ == "__main__":
     sample = args.sample
     runs = args.runs
 
-    total_t = 5
+    total_t = 1
     var_err_list = []
     mean_err_list = []
     for t in range(total_t):
@@ -132,6 +132,7 @@ if __name__ == "__main__":
         mean_err_list.append(approx_mean_err.item())
         print("avg Estimation of eq7: ", approx.mean())
         print("avg Var of T: ", T_tensor.mean())
+        print("avg Var of estimation: ", approx_var.mean())
         print("error: ", (approx_var.mean() - T_tensor.var()).abs() / T_tensor.var())
 
         log_file = f"first_order_numerical.txt"
