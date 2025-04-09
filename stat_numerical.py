@@ -72,9 +72,9 @@ if __name__ == "__main__":
             
             A =  observed_M.T @ observed_M
             A_mask = A != 0
-            diag_mask = torch.eye(A.shape[0], dtype=torch.bool).to(device)
-            off_diag_mask = ~diag_mask
-            A_mask = A_mask & off_diag_mask
+            #diag_mask = torch.eye(A.shape[0], dtype=torch.bool).to(device)
+            #off_diag_mask = ~diag_mask
+            #A_mask = A_mask & off_diag_mask
             A_list.append(A[A_mask])
 
             B = (1 * (observed_M != 0)).float().T @ (1 * (observed_M != 0).float())
