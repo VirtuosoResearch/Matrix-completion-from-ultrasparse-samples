@@ -131,8 +131,9 @@ if __name__ == "__main__":
         var_err_list.append(approx_var_err.item())
         mean_err_list.append(approx_mean_err.item())
         print("avg Estimation of eq7: ", approx.mean())
-        print("avg Var of T: ", T_tensor.mean())
+        print("avg Mean of T: ", T_tensor.mean())
         print("avg Var of estimation: ", approx_var.mean())
+        print("avg Var of T: ", T_tensor.var())
         print("error: ", (approx_var.mean() - T_tensor.var()).abs() / T_tensor.var())
 
         log_file = f"first_order_numerical.txt"
