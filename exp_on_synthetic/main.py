@@ -3,10 +3,10 @@ import numpy as np
 from datetime import datetime
 from argparse import ArgumentParser
 
-from iipw import IIPW
-from utils import load_syn_data
-from utils import get_uniform_masks, get_random_samples_per_row
-from row_recovery import lstsq_recovery, optimize_recovery
+from src.iipw import IIPW
+from src.utils import load_syn_data
+from src.utils import get_uniform_masks, get_random_samples_per_row
+from src.row_recovery import lstsq_recovery, optimize_recovery
 
 
 if __name__ == "__main__":
