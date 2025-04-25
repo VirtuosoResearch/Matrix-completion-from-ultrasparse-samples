@@ -3,9 +3,6 @@ import numpy as np
 from datetime import datetime
 from argparse import ArgumentParser
 
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 from iipw import IIPW
 from utils import load_syn_data
 from utils import get_uniform_masks, get_random_samples_per_row
