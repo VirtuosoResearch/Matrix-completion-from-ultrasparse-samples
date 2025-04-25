@@ -71,10 +71,9 @@ if __name__ == "__main__":
         
         # user-level recovery using least square
         print('User-level recovery...')
-        rmse = optimize_recovery(M=M, masks=recovery_masks, r=r, V=U.detach(), lr=0.1, epochs=1000, tol=1e-9, lam=1e-10)
-        print(f"opt RMSE: {rmse:.7f}")
-        rmse = lstsq_recovery(estimation_goal=estimation_matrix, M=M, r=r, recovery_masks=recovery_masks, V=U.detach().T, use_reg=True, lam=0.0001)
-        print(f"lstsq RMSE: {rmse:.7f}")
+        rmse = optimize_recovery(M=M, masks=recovery_masks, r=r, V=U.detach(), lr=0.1, epochs=1000, tol=1e-11, lam=1e-10)
+        # optioanlly, use lstsq_recovery
+        #rmse = lstsq_recovery(estimation_goal=estimation_matrix, M=M, r=r, recovery_masks=recovery_masks, V=U.detach().T, use_reg=True, lam=0.0001)
         rmse_list.append(rmse)
 
     # results of runs

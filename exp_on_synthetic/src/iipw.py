@@ -54,13 +54,12 @@ class IIPW:
         T_masks = 1.0 * (self.T!=0)
         m = T_masks.sum().item()
         U = torch.rand(self.d, self.r).to(T.device) * 0.1
-        #U.require_grad = True
 
         # donw weight the diagonal entries
         down_weight_mask = torch.ones(self.d, self.d)
         diag_values = 1 - (1 - self.p**2)**self.d
         down_weight_mask.fill_diagonal_(diag_values)
-        #T_masks.fill_diagonal_(diag_values)
+        T_masks.fill_diagonal_(diag_values)
 
         print('Imputing...')
         err_estimates = []

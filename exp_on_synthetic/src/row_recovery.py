@@ -9,9 +9,9 @@ def optimize_recovery(M, masks, r, V=None, epochs=200, lr=0.1, tol=1e-9, lam=0):
     train_losses = []
     d1, d2 = M.shape
 
-    nnz_masks = M != 0
-    masks = masks & nnz_masks
-    test_masks = ~masks & nnz_masks
+    nz_masks = M != 0
+    masks = masks & nz_masks
+    test_masks = ~masks & nz_masks
 
     # Initialize U (and V)
     U = torch.randn(d1, r, device=device, requires_grad=False)
@@ -40,7 +40,7 @@ def optimize_recovery(M, masks, r, V=None, epochs=200, lr=0.1, tol=1e-9, lam=0):
 
         train_losses.append(loss.item())
         if i > 10:
-            if train_losses[-1] - train_losses[-2] < tol:
+            if abs(train_losses[-1] - train_losses[-2]) < tol:
                 break
         loop.set_description(f"loss: {loss:.7f}")
     
