@@ -1,6 +1,8 @@
 ### Overview
 
-We provide the implementation of Efficient One-Sided Matrix Completion Using Inverse Probability Weighting.  First, the algorithm uses the estimated propensity from the observed data matrix M to estimate the second-moment matrix $M^\top M$. Second, provided with the inversely weighted second-moment matrix, we consider an iterative, low-rank imputation algorithm by computing a rank-r singular vector decomposition of the reweighted second-moment matrix. We evaluate the relative estimation error and RMSE in user-level recovery of our algorithm.
+We provide the implementation of Efficient One-Sided Matrix Completion Using Inverse Probability Weighting.  
+
+The algorithm first obtains an unbiased estimate of the second moment matrix using Inverse Probability Weighting (IPW). It then performs gradient-based imputation to compute a one-sided matrix completion result $V$. Furthermore, $V$ can be utilized to reconstruct user-level missing data by solving a least squares optimization problem.
 
 ### Datasets
 
@@ -46,4 +48,3 @@ We provide the code for runing experiments on synthetic datasets and MovieLens d
 * Parameters:
 
   * --p: Sample probability (Default: 0.8).
-
