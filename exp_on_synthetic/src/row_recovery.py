@@ -44,7 +44,7 @@ def optimize_recovery(M, masks, r, V=None, epochs=200, lr=0.1, tol=1e-9, lam=0):
                 break
         loop.set_description(f"loss: {loss:.7f}")
     
-    rmse = torch.sqrt(torch.sum((X-M)[test_masks]**2)/num_entries)
+    rmse = torch.sqrt(torch.sum((X-M)[test_masks]**2)/test_masks.sum())
 
     return rmse.item()
 
