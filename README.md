@@ -1,8 +1,8 @@
 ### Overview
 
-We provide the implementation of Efficient One-Sided Matrix Completion Using Inverse Probability Weighting.  
+We provide the implementation of a gradient based imputation algorithm for one-sided matrix completion using inverse probability weighting (GradIPW).  
 
-The algorithm first obtains an unbiased estimate of the second moment matrix using Inverse Probability Weighting (IPW). It then performs gradient-based imputation to compute a one-sided matrix completion result $V$. Furthermore, $V$ can be utilized to reconstruct user-level missing data by solving a least squares optimization problem.
+The algorithm first obtains an unbiased estimate of the second moment matrix using inverse probability weighting (IPW). It then performs gradient-based imputation to compute a one-sided matrix completion result $V$. Furthermore, $V$ can be utilized to reconstruct user-level missing data by solving a least squares optimization problem.
 
 ### Datasets
 
