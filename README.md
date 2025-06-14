@@ -1,12 +1,12 @@
 ### Overview
 
-We provide the implementation of a gradient based imputation algorithm for one-sided matrix completion using inverse probability weighting (GIPW).  
+We provide the implementation of a One-Sided Matrix Completion from Ultra-Sparse Samples using Hajek's estimator.
 
-The algorithm first obtains an unbiased estimate of the second moment matrix using inverse probability weighting (IPW). It then performs gradient-based imputation to compute a one-sided matrix completion result $V$. Furthermore, $V$ can be utilized to reconstruct user-level missing data by solving a least squares optimization problem.
+The algorithm first obtains an unbiased estimate of the second moment matrix using Hajek's estimator. It then runs gradient descent to impute the missing entries of $T$ based on $X_t X_t^{\top}$. Furthermore,  the estimated second-moment matrix can be utilized to reconstruct user-level missing data by solving a least-squares optimization problem.
 
 ### Datasets
 
-* Synthetic datasets: Synthetic datasets is generated when executing the code
+* Synthetic datasets: Synthetic datasets are generated when executing the code
 * MovieLens datasets: MovieLens 20M, MovieLens 25M, and MovieLens 32M.
   * Download from: [https://grouplens.org/datasets/movielens/](https://grouplens.org/datasets/movielens/)
   * The data path is `./data/[data name]/ratings.csv`, e.g. `./data/ml-32m/ratings.csv`.
@@ -15,12 +15,11 @@ The algorithm first obtains an unbiased estimate of the second moment matrix usi
 
 ### Experiments
 
-We provide the code for runing experiments on synthetic datasets and MovieLens datasets.
+We provide the code for running experiments on synthetic datasets and the MovieLens datasets.
 
 **Synthetic datasets.** 
 
-* Command: 
-
+* Command:
 
   ```sh
   cd ./exp_on_synthetic
@@ -42,8 +41,7 @@ We provide the code for runing experiments on synthetic datasets and MovieLens d
   cd ./exp_on_realdata
   python main.py --dataset [data name]
   ```
-
-* The code will generate a file `matrix.pt` in the corresponding data path after proccessing the data in the first time, which can be quickly accessed during the next run.
+* The code will generate a file `matrix.pt` in the corresponding data path after processing the data for the first time, which can be quickly accessed during the next run.
 
 * Parameters:
 
