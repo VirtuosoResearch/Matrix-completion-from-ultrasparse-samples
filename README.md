@@ -1,8 +1,8 @@
 ### Overview
 
-We provide the implementation for Matrix Completion from Ultra-Sparse Samples using H\'ajek estimator.
+We provide the implementation for Matrix Completion from Ultra-Sparse Samples using Hájek estimator.
 
-The algorithm first obtains an unbiased estimate of the second moment matrix using H\'ajek estimator. It then runs gradient descent to impute the missing entries of $T$ based on $X_t X_t^{\top}$. Furthermore,  the estimated second-moment matrix can be utilized to reconstruct user-level missing data by solving a least-squares regression problem.
+The algorithm first obtains an unbiased estimate of the second-moment matrix using Hájek estimator. It then runs gradient descent to impute the missing entries of the second-moment matrix based on low-rank iterates. Furthermore, the estimated second-moment matrix can be utilized to reconstruct user-level missing data by solving a least-squares regression problem.
 
 ### Datasets
 
