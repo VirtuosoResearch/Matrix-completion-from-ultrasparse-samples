@@ -1,8 +1,8 @@
 ### Overview
 
-We provide the implementation of a One-Sided Matrix Completion from Ultra-Sparse Samples using Hajek's estimator.
+We provide the implementation for Matrix Completion from Ultra-Sparse Samples using H\'ajek estimator.
 
-The algorithm first obtains an unbiased estimate of the second moment matrix using Hajek's estimator. It then runs gradient descent to impute the missing entries of $T$ based on $X_t X_t^{\top}$. Furthermore,  the estimated second-moment matrix can be utilized to reconstruct user-level missing data by solving a least-squares regression problem.
+The algorithm first obtains an unbiased estimate of the second moment matrix using H\'ajek estimator. It then runs gradient descent to impute the missing entries of $T$ based on $X_t X_t^{\top}$. Furthermore,  the estimated second-moment matrix can be utilized to reconstruct user-level missing data by solving a least-squares regression problem.
 
 ### Datasets
 
@@ -15,7 +15,7 @@ The algorithm first obtains an unbiased estimate of the second moment matrix usi
 
 ### Experiments
 
-We provide the code for running experiments on synthetic datasets and the MovieLens datasets.
+We provide code for running experiments on the synthetic and MovieLens datasets.
 
 **Synthetic datasets.** 
 
