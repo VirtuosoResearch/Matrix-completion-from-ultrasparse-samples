@@ -4,7 +4,7 @@ from datetime import datetime
 from argparse import ArgumentParser
 
 from src.iipw import IIPW
-from src.utils import load_syn_data_low_rank, load_syn_data_mixture_model
+from src.utils import load_syn_data_common_means, load_syn_data_noisy_mixtures, load_syn_data_linear_mixtures
 from src.utils import get_uniform_masks, get_random_samples_per_row
 from src.row_recovery import lstsq_recovery, optimize_recovery
 
@@ -16,19 +16,24 @@ if __name__ == "__main__":
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--runs", type=int, default=1)
     # matrix parameters
-    parser.add_argument("--r", type=int, default=10)
+    parser.add_argument("--r", type=int, default=5)
     parser.add_argument("--n", type=int, default=10000)
     parser.add_argument("--d", type=int, default=1000)
     # sample parameters
     parser.add_argument("--sample", type=str, default="uniform")
     parser.add_argument("--p", type=float, default=0.01)
     parser.add_argument("--ob", type=int, default=2)
+    parser.add_argument(
+        "--estimator",
+        choices=("hajek", "mixture-hajek"),
+        default="hajek",
+    )
     # gradient descent parameters
     parser.add_argument("--lr", type=float, default=1e4)
     parser.add_argument("--alpha", type=float, default=0.001)
     parser.add_argument("--lam_alpha", type=float, default=1e-4)
     parser.add_argument("--n_iter", type=int, default=10000)
-    parser.add_argument("--skip_recovery", action="store_true", default=False)
+    parser.add_argument("--skip_recovery", action="store_true", default=True)
 
     args = parser.parse_args()
 
@@ -43,7 +48,7 @@ if __name__ == "__main__":
 
     n = args.n
     d = args.d
-    M = load_syn_data_mixture_model(args.r, n, d, device)
+    M = load_syn_data_linear_mixtures(args.r, n, d, device)
 
     # main part
     err_list = []
@@ -57,14 +62,21 @@ if __name__ == "__main__":
         if args.sample == 'uniform':  
             observed_M, masks = get_uniform_masks(M, p)
         # Observe fixed number of entries per row
-        else:
+        elif args.sample == 'fixed':
             p = args.ob / d
             observed_M, masks = get_random_samples_per_row(M.cpu().numpy(), args.ob)
             observed_M = torch.from_numpy(observed_M).float().to(device)
             masks = torch.from_numpy(masks).to(device)
         
         # impute missing values from rank-r SVD corresponding to masks
-        iipw = IIPW(M=M, observed_M=observed_M, masks=masks, p=p, r=r)
+        iipw = IIPW(
+            M=M,
+            observed_M=observed_M,
+            masks=masks,
+            p=p,
+            r=r,
+            estimator=args.estimator,
+        )
         U, estimation_matrix, err = iipw.impute(n_iter=args.n_iter, lr=args.lr, alpha=args.alpha, lam=args.lam_alpha, tol=1e-7)
         err = err / torch.norm(M.T @ M / n, p='fro').item()
         err_list.append(err)
@@ -85,7 +97,7 @@ if __name__ == "__main__":
     time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if args.sample == 'uniform':
         sampling_info = f"uniform sampling, p={args.p}"
-    else:
+    elif args.sample == 'fixed':
         sampling_info = f"fixed entries per row, ob={args.ob}"
     if args.skip_recovery:
         content = f"Time: {time}\n {sampling_info}\n Synthetic data: n={n}, d={d}:\n\

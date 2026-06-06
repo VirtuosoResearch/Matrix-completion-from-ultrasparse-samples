@@ -6,7 +6,7 @@ import scipy
 from scipy.sparse import csr_matrix, coo_matrix
 from sklearn.preprocessing import LabelEncoder
 
-def load_syn_data_low_rank(r=5, d1=5000, d2=2000, device='cpu'):
+def load_syn_data_common_means(r=5, d1=5000, d2=2000, device='cpu'):
     mean = 2 / np.sqrt(d2)
     sigma = 1 / d2
     X = torch.normal(mean, sigma, size = (d1, d2)).to(device)
@@ -17,10 +17,31 @@ def load_syn_data_low_rank(r=5, d1=5000, d2=2000, device='cpu'):
 
     return X
 
-def load_syn_data_mixture_model(r=5, d1=5000, d2=2000, device='cpu'):
+def load_syn_data_noisy_mixtures(r=5, d1=5000, d2=2000, device='cpu'):
     factors = np.random.normal(0, 1, size=(r, d2))
-    weights = np.random.dirichlet(np.ones(r), size=d1)
-    X = weights @ factors
+    U, D, Vt = np.linalg.svd(factors, full_matrices=False)
+    Vt = Vt[:r, :]
+
+    X = np.zeros((d1, d2))
+    for i in range(d1):
+        i_idx = np.random.choice(r)
+        X[i, :] = Vt[i_idx, :] + np.random.normal(0, 0.0001, size=(d2,))
+
+    return torch.tensor(X, dtype=torch.float32).to(device)
+
+def load_syn_data_linear_mixtures(r=5, d1=5000, d2=2000, device='cpu'):
+    factors = np.random.normal(0, 1, size=(r, d2))
+    U, D, Vt = np.linalg.svd(factors, full_matrices=False)
+    Vt = Vt[:r, :]
+
+    X = np.zeros((d1, d2))
+    for i in range(d1):
+        weights = np.random.uniform(0.25, 1.75, size=(r,))
+        weights /= weights.sum()
+        #weights = np.random.dirichlet(alpha=np.ones(r))
+        for j in range(r):
+            X[i, :] += weights[j] * Vt[j, :]
+        X[i, :] += np.random.normal(0, 0.0001, size=(d2,))
 
     return torch.tensor(X, dtype=torch.float32).to(device)
 
