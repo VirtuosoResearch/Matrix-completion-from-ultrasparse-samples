@@ -6,7 +6,7 @@ import scipy
 from scipy.sparse import csr_matrix, coo_matrix
 from sklearn.preprocessing import LabelEncoder
 
-def load_syn_data(r=5, d1=5000, d2=2000, device='cpu'):
+def load_syn_data_low_rank(r=5, d1=5000, d2=2000, device='cpu'):
     mean = 2 / np.sqrt(d2)
     sigma = 1 / d2
     X = torch.normal(mean, sigma, size = (d1, d2)).to(device)
@@ -16,6 +16,14 @@ def load_syn_data(r=5, d1=5000, d2=2000, device='cpu'):
     X = U @ torch.diag(D) @ Vt
 
     return X
+
+def load_syn_data_mixture_model(r=5, d1=5000, d2=2000, device='cpu'):
+    factors = np.random.normal(0, 1, size=(r, d2))
+    weights = np.random.dirichlet(np.ones(r), size=d1)
+    X = weights @ factors
+
+    return torch.tensor(X, dtype=torch.float32).to(device)
+
 
 def load_data(dataset):
     data_path = './data/'

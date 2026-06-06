@@ -4,7 +4,7 @@ from datetime import datetime
 from argparse import ArgumentParser
 
 from src.iipw import IIPW
-from src.utils import load_syn_data
+from src.utils import load_syn_data_low_rank, load_syn_data_mixture_model
 from src.utils import get_uniform_masks, get_random_samples_per_row
 from src.row_recovery import lstsq_recovery, optimize_recovery
 
@@ -27,7 +27,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e4)
     parser.add_argument("--alpha", type=float, default=0.001)
     parser.add_argument("--lam_alpha", type=float, default=1e-4)
-    parser.add_argument("--n_iter", type=int, default=20000)
+    parser.add_argument("--n_iter", type=int, default=10000)
+    parser.add_argument("--skip_recovery", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -42,11 +43,11 @@ if __name__ == "__main__":
 
     n = args.n
     d = args.d
-    M = load_syn_data(args.r, n, d, device)
+    M = load_syn_data_mixture_model(args.r, n, d, device)
 
     # main part
     err_list = []
-    rmse_list = []    
+    rmse_list = []
     for run in range(args.runs):
         # sample observed data
         p = args.p
@@ -62,28 +63,36 @@ if __name__ == "__main__":
             observed_M = torch.from_numpy(observed_M).float().to(device)
             masks = torch.from_numpy(masks).to(device)
         
-        _, recovery_masks = get_uniform_masks(M, recovery_p)
-
         # impute missing values from rank-r SVD corresponding to masks
         iipw = IIPW(M=M, observed_M=observed_M, masks=masks, p=p, r=r)
         U, estimation_matrix, err = iipw.impute(n_iter=args.n_iter, lr=args.lr, alpha=args.alpha, lam=args.lam_alpha, tol=1e-7)
+        err = err / torch.norm(M.T @ M / n, p='fro').item()
         err_list.append(err)
-        
-        # user-level recovery using least square
-        print('User-level recovery...')
-        rmse = optimize_recovery(M=M, masks=recovery_masks, r=r, V=U.detach(), lr=0.1, epochs=1000, tol=1e-11, lam=1e-10)
-        # optioanlly, use lstsq_recovery
-        #rmse = lstsq_recovery(estimation_goal=estimation_matrix, M=M, r=r, recovery_masks=recovery_masks, V=U.detach().T, use_reg=True, lam=0.0001)
-        rmse_list.append(rmse)
+
+        if not args.skip_recovery:
+            _, recovery_masks = get_uniform_masks(M, recovery_p)
+            # user-level recovery using least square
+            print('User-level recovery...')
+            rmse = optimize_recovery(M=M, masks=recovery_masks, r=r, V=U.detach(), lr=0.1, epochs=1000, tol=1e-11, lam=1e-10)
+            # optioanlly, use lstsq_recovery
+            rmse = lstsq_recovery(estimation_goal=estimation_matrix, M=M, r=r, recovery_masks=recovery_masks, V=U.detach().T, use_reg=True, lam=0.0001)
+            ground_truth_rmse = torch.sqrt(torch.mean(M**2)).item()
+            rmse_list.append(rmse / ground_truth_rmse)
 
     # results of runs
     err_mean = np.mean(err_list)
     err_std = np.std(err_list)
-    rmse_mean = np.mean(rmse_list)
-    rmse_std = np.std(rmse_list)
-    # Define the content in the desired format
     time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    content = f"Time: {time}\n p: {args.p}, ob: {args.ob}\n Synthetic data: n={n}, d={d}:\n\
- Estimation error: {err_mean:.7f}+-{err_std:.7f}, user-level recovery RMSE: {rmse_mean:.7f}+-{rmse_std:.7f}\n"
+    if args.sample == 'uniform':
+        sampling_info = f"uniform sampling, p={args.p}"
+    else:
+        sampling_info = f"fixed entries per row, ob={args.ob}"
+    if args.skip_recovery:
+        content = f"Time: {time}\n {sampling_info}\n Synthetic data: n={n}, d={d}:\n\
+ Estimation error: {err_mean:.7f}+-{err_std:.7f}\n"
+    else:
+        rmse_mean = np.mean(rmse_list)
+        rmse_std = np.std(rmse_list)
+        content = f"Time: {time}\n {sampling_info}\n Synthetic data: n={n}, d={d}:\n Normalized estimation error: {err_mean:.7f}+-{err_std:.7f}, normalized user-level recovery RMSE: {rmse_mean:.7f}+-{rmse_std:.7f}\n"
     content += '\n'
     print(content)
